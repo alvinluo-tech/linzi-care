@@ -27,7 +27,16 @@ jobs:
         run: npm ci
 
       - name: Lint
-        run: npm run lint
+        run: |
+          set +e
+          npx eslint . --format unix 2>&1 | tee lint-output.txt
+          status=${PIPESTATUS[0]}
+          echo "eslint exit: $status"
+          echo "### Lint output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          head -c 6000 lint-output.txt >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $status
 
       - name: Build
         run: npm run build
