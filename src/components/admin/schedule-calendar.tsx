@@ -124,8 +124,8 @@ export function ScheduleCalendar({
     defaultView: "week",
     locale: "zh-CN",
     dayBoundaries: {
-      start: "09:30",
-      end: "21:30",
+      start: "09:00",
+      end: "22:00",
     },
     weekOptions: {
       gridHeight: 480, // 精致收紧，一屏纵览
