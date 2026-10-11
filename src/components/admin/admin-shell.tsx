@@ -67,7 +67,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <SideContent onNavigate={() => setMobileOpen(false)} />
             </SheetContent>
           </Sheet>
-          <span className="font-serif tracking-widest">梓养云 · 管理端</span>
+          <span className="font-serif tracking-widest">林梓精养馆 · 管理端</span>
         </header>
 
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>

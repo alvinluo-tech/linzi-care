@@ -1,7 +1,7 @@
 export type Role = "admin" | "staff" | "customer";
 
 export const STORE_NAME = "林梓精养馆";
-export const STORE_BRAND = "梓养云";
+export const STORE_BRAND = "林梓精养馆";
 export const STORE_POSITIONING = "头疗 · 美容 · 养生";
 export const STORE_TAGLINE = "身心归处 · 静养有方";
 export const STORE_DESCRIPTION =

@@ -248,7 +248,7 @@ export function PushNotificationButton({
                 3
               </span>
               <p className="leading-relaxed">
-                回到手机桌面，点击刚刚添加的「<strong>梓养云</strong>」图标打开，再点击「开启预约提醒」即可允许系统通知。
+                回到手机桌面，点击刚刚添加的「<strong>林梓精养馆</strong>」图标打开，再点击「开启预约提醒」即可允许系统通知。
               </p>
             </div>
           </div>

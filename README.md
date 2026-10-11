@@ -1,4 +1,4 @@
-# Linzi Care · 梓养云
+# Linzi Care · 林梓精养馆
 
 [![CI](https://github.com/alvinluo-tech/linzi-care/actions/workflows/ci.yml/badge.svg)](https://github.com/alvinluo-tech/linzi-care/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](LICENSE)
@@ -9,7 +9,7 @@
 
 A refined appointment and member management platform for boutique wellness studios. Built as a single-store MVP with a **closed account model** (no public signup), a **display-only storefront**, and a **server-authoritative member balance** — styled in a modern Chinese-inspired light-luxury aesthetic.
 
-> 梓养云 · 轻约版 —— 面向精品养生馆的预约与会员管理系统：分配制账号 · 纯展示商城 · 服务端权威余额。
+> 林梓精养馆 —— 面向精品养生馆的预约与会员管理系统：分配制账号 · 纯展示商城 · 服务端权威余额。
 
 ## Highlights
 
@@ -81,6 +81,19 @@ NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:7897 npm run dev
 ```
 
 Demo accounts for local development are listed in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+### 4. End-to-end tests
+
+A 32-case E2E suite lives in `tests/e2e/` and exercises the **real** backend (live Supabase project) plus the rendered pages — no mocks. It follows Given-When-Then, runs strictly sequentially, and cleans up every record it creates (test bookings are tagged and deleted; balances are restored).
+
+```bash
+npm run dev        # terminal 1 — suite verifies pages on http://localhost:3002
+npm run test:e2e   # terminal 2 — run all 32 cases
+```
+
+Coverage: anonymous RLS boundaries · public pages & PWA assets · three-role auth · customer booking journey (slots, conflict rejection, self-cancel) · owner confirmation with customer notification loop · staff check-in (arrived/done/no-show) · appointment state-machine guards · balance security & audit trail.
+
+If Supabase is only reachable through a proxy, the suite defaults to `http://127.0.0.1:7897`; override with `E2E_PROXY=direct` or `E2E_PROXY=http://host:port`.
 
 ## Project Structure
 

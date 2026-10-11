@@ -25,7 +25,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "林梓精养馆 · 梓养云",
+    default: "林梓精养馆 · 头疗美容养生",
     template: "%s · 林梓精养馆",
   },
   description:
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "梓养云",
+    title: "林梓精养馆",
   },
   icons: {
     icon: "/icons/icon-192.png",

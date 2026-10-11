@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import {
   addDays,
   dateKey,
@@ -101,33 +102,24 @@ export function BookingWizard() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase
-      .from("services")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order")
-      .then(({ data }) => setServices((data as Services[]) ?? []));
-    supabase
-      .from("staff")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order")
-      .then(({ data }) => setStaffList((data as Staff[]) ?? []));
-    supabase
-      .from("staff_services")
-      .select("*")
-      .then(({ data }) => setStaffServices((data as StaffServices[]) ?? []));
+    q(() =>
+      supabase.from("services").select("*").eq("is_active", true).order("sort_order")
+    ).then(({ data }) => setServices((data as Services[]) ?? []));
+    q(() =>
+      supabase.from("staff").select("*").eq("is_active", true).order("sort_order")
+    ).then(({ data }) => setStaffList((data as Staff[]) ?? []));
+    q(() => supabase.from("staff_services").select("*")).then(({ data }) =>
+      setStaffServices((data as StaffServices[]) ?? [])
+    );
 
     (async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        const { data: memberRow } = await supabase
-          .from("members")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const { data: memberRow } = await q(() =>
+          supabase.from("members").select("*").eq("user_id", user.id).maybeSingle()
+        );
         setMember((memberRow as Members) ?? null);
       }
       setAuthChecked(true);
@@ -163,21 +155,21 @@ export function BookingWizard() {
     if (!serviceId || !staffId || !date) return;
     setSlotsLoading(true);
     setSlots(null);
-    createClient()
-      .rpc("get_available_slots", {
+    q(() =>
+      createClient().rpc("get_available_slots", {
         p_staff_id: staffId,
         p_service_id: serviceId,
         p_date: date,
       })
-      .then(({ data, error }) => {
-        if (error) {
-          toast.error("获取可约时段失败", { description: error.message });
-          setSlots([]);
-        } else {
-          setSlots((data as { slot_start: string }[]).map((r) => r.slot_start));
-        }
-        setSlotsLoading(false);
-      });
+    ).then(({ data, error }) => {
+      if (error) {
+        toast.error("获取可约时段失败", { description: error.message });
+        setSlots([]);
+      } else {
+        setSlots((data as { slot_start: string }[]).map((r) => r.slot_start));
+      }
+      setSlotsLoading(false);
+    });
   }, [serviceId, staffId, date]);
 
   const selectService = (id: string) => {
@@ -225,7 +217,7 @@ export function BookingWizard() {
           {/* 折头顶栏 */}
           <div className="relative border-b border-dashed border-bronze-300/70 p-8 text-center">
             <span className="inline-block border border-bronze-600/70 bg-bronze-50/70 px-2.5 py-0.5 font-serif text-[11px] tracking-widest text-bronze-800">
-              梓养云 · 预约凭单
+              林梓精养馆 · 预约凭单
             </span>
             <h2 className="mt-4 font-serif text-3xl text-bark-800">
               预约已敬呈

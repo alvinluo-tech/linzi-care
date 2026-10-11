@@ -107,7 +107,7 @@ export function SiteHeader() {
               {STORE_NAME}
             </span>
             <span className="block text-[10px] tracking-[0.3em] text-bark-400">
-              ZIYANG CLOUD · 新塘国贸汇
+              LINZI WELLNESS · 新塘国贸汇
             </span>
           </div>
         </Link>

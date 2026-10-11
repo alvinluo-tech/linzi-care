@@ -38,7 +38,7 @@ export function SiteFooter() {
                 {store?.name ?? STORE_NAME}
               </p>
               <p className="text-[10px] tracking-[0.3em] text-bark-300">
-                ZIYANG CLOUD
+                LINZI WELLNESS
               </p>
             </div>
           </div>
@@ -81,7 +81,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-bark-800">
         <p className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-bark-300 md:px-6">
-          © 2026 {store?.name ?? STORE_NAME} · 梓养云轻约版
+          © 2026 {store?.name ?? STORE_NAME} · 头疗美容养生
         </p>
       </div>
     </footer>
