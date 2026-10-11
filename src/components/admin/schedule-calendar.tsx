@@ -17,45 +17,46 @@ interface ScheduleCalendarProps {
   staffFilter: string;
 }
 
+// 温润内敛的新中式轻奢色系：以宣纸暖米白打底，金铜与深木色提纲
 const CALENDARS_CONFIG = {
   confirmed: {
     colorName: "confirmed",
     lightColors: {
-      main: "#b8860b",
-      container: "#fbf6e9",
-      onContainer: "#63490f",
+      main: "#b8860b",        // 雅致金铜
+      container: "#fbf6e9",   // 浅暖金宣底
+      onContainer: "#5c4636", // 深木褐字
     },
   },
   done: {
     colorName: "done",
     lightColors: {
-      main: "#10b981",
-      container: "#ecfdf5",
-      onContainer: "#065f46",
+      main: "#15803d",        // 竹青翠绿
+      container: "#f0fdf4",   // 浅竹宣纸
+      onContainer: "#14532d",
     },
   },
   arrived: {
     colorName: "arrived",
     lightColors: {
-      main: "#0284c7",
+      main: "#0369a1",        // 天青蓝
       container: "#f0f9ff",
-      onContainer: "#075985",
+      onContainer: "#0c4a6e",
     },
   },
   pending: {
     colorName: "pending",
     lightColors: {
-      main: "#d97706",
+      main: "#d97706",        // 琥珀黄
       container: "#fffbeb",
-      onContainer: "#92400e",
+      onContainer: "#78350f",
     },
   },
   cancelled: {
     colorName: "cancelled",
     lightColors: {
-      main: "#a8a29e",
-      container: "#f5f5f4",
-      onContainer: "#78716c",
+      main: "#9ca3af",        // 水墨灰
+      container: "#f3f4f6",
+      onContainer: "#6b7280",
     },
   },
   no_show: {
@@ -123,11 +124,11 @@ export function ScheduleCalendar({
     defaultView: "week",
     locale: "zh-CN",
     dayBoundaries: {
-      start: "08:00",
-      end: "22:00",
+      start: "09:30",
+      end: "21:30",
     },
     weekOptions: {
-      gridHeight: 900,
+      gridHeight: 480, // 精致收紧，一屏纵览
       nDays: 7,
     },
     calendars: CALENDARS_CONFIG,
@@ -149,8 +150,33 @@ export function ScheduleCalendar({
   }, [calendar, sxEvents]);
 
   return (
-    <div className="schedule-x-theme-linzi rounded-xl border border-border bg-card p-3 shadow-xs">
+    <div className="schedule-x-theme-linzi overflow-hidden rounded-xl border border-bark-200/60 bg-[#FAF7F1] p-3 shadow-xs">
       <ScheduleXCalendar calendarApp={calendar} />
+
+      {/* 底部集成雅致状态色例 */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-bark-200/40 pt-2.5 text-[11px] text-bark-500">
+        <div className="flex items-center gap-1.5 font-serif text-bark-600">
+          <span className="size-1.5 rotate-45 bg-bronze-600" />
+          <span>点击色块客单，即可直接执行「确认接单 / 贵宾到店 / 完成理疗 / 取消」等状态流转</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="flex items-center gap-1">
+            <span className="size-2 rounded-full bg-amber-500" /> 待确认
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="size-2 rounded-full bg-bronze-500" /> 已确认
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="size-2 rounded-full bg-sky-600" /> 已到店
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="size-2 rounded-full bg-emerald-600" /> 已完成
+          </span>
+          <span className="flex items-center gap-1 text-bark-400">
+            <span className="size-2 rounded-full bg-stone-400" /> 已取消
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

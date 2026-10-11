@@ -226,31 +226,138 @@
   }
 }
 
-/* Schedule-X 新中式轻奢主题定制 */
+/* Schedule-X 新中式轻奢主题定制：全面融入宣纸暖米白与宋代深木棕色调 */
 .schedule-x-theme-linzi {
   --sx-color-primary: #b8860b;
   --sx-color-on-primary: #ffffff;
-  --sx-color-surface: var(--card);
-  --sx-color-surface-dim: var(--secondary);
-  --sx-color-on-surface: var(--foreground);
-  --sx-color-surface-container: var(--card);
-  --sx-color-surface-container-high: var(--secondary);
-  --sx-color-outline: var(--border);
-  --sx-color-outline-variant: var(--border);
+  --sx-color-surface: #faf7f1;
+  --sx-color-surface-dim: #f5f0e8;
+  --sx-color-on-surface: #3d2b1f;
+  --sx-color-surface-container: #faf7f1;
+  --sx-color-surface-container-high: #f0e9dc;
+  --sx-color-outline: #e7dcd2;
+  --sx-color-outline-variant: #ede4d6;
   font-family: var(--font-sans);
 }
 
-.schedule-x-theme-linzi .sx__time-grid-event,
-.schedule-x-theme-linzi .sx__date-grid-event {
-  border-radius: 6px;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+/* 消除冷白色底板，使用柔和宣纸暖色 */
+.schedule-x-theme-linzi .sx__calendar-wrapper,
+.schedule-x-theme-linzi .sx__view-container,
+.schedule-x-theme-linzi .sx__week-grid,
+.schedule-x-theme-linzi .sx__time-grid,
+.schedule-x-theme-linzi .sx__date-grid,
+.schedule-x-theme-linzi .sx__month-grid,
+.schedule-x-theme-linzi .sx__month-grid-day {
+  background-color: #faf7f1 !important;
 }
 
+/* 月视图与天视图格子美化 */
+.schedule-x-theme-linzi .sx__month-grid-day {
+  border-color: #ede4d6 !important;
+}
+.schedule-x-theme-linzi .sx__month-grid-day__header {
+  color: #7e6350 !important;
+  font-family: var(--font-serif);
+}
+
+/* 顶部导航工具栏：雅致深木棕字体与微小圆角按钮 */
+.schedule-x-theme-linzi .sx__calendar-header {
+  border-bottom: 1px solid #e7dcd2;
+  padding: 6px 10px 14px 10px;
+}
+.schedule-x-theme-linzi .sx__range-heading {
+  font-family: var(--font-serif);
+  color: #3d2b1f;
+  font-size: 16px !important;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.schedule-x-theme-linzi .sx__forward-backward-navigation button,
+.schedule-x-theme-linzi .sx__today-button,
+.schedule-x-theme-linzi .sx__view-selection-selected-item {
+  border-radius: 6px !important;
+  border: 1px solid #e7dcd2 !important;
+  background-color: #fffdf9 !important;
+  color: #5c4636 !important;
+  font-size: 12px !important;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(61, 43, 31, 0.04) !important;
+}
+.schedule-x-theme-linzi .sx__forward-backward-navigation button:hover,
+.schedule-x-theme-linzi .sx__today-button:hover,
+.schedule-x-theme-linzi .sx__view-selection-selected-item:hover {
+  background-color: #f5ead0 !important;
+  color: #7d5b0c !important;
+  border-color: #ddbe72 !important;
+}
+
+/* 视图选择下拉菜单深度定制：宣纸白底、宋代深木棕字、金铜 hover */
+.schedule-x-theme-linzi .sx__view-selection-items {
+  background-color: #fffdf9 !important;
+  border: 1px solid #e7dcd2 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 16px rgba(61, 43, 31, 0.08) !important;
+  padding: 4px !important;
+}
+.schedule-x-theme-linzi .sx__view-selection-item {
+  color: #4a382b !important;
+  font-size: 12px !important;
+  border-radius: 4px !important;
+  padding: 6px 12px !important;
+  transition: background-color 0.15s ease;
+}
+.schedule-x-theme-linzi .sx__view-selection-item:hover {
+  background-color: #f5ead0 !important;
+  color: #7d5b0c !important;
+}
+.schedule-x-theme-linzi .sx__view-selection-item.is-selected {
+  background-color: #fbf6e9 !important;
+  color: #b8860b !important;
+  font-weight: 600 !important;
+}
+
+/* 星期与日期表头：深棕衬线与金铜今日高亮 */
+.schedule-x-theme-linzi .sx__week-grid__date,
+.schedule-x-theme-linzi .sx__week-day-name {
+  color: #7e6350 !important;
+  font-family: var(--font-serif);
+}
+.schedule-x-theme-linzi .sx__week-grid__date--is-today {
+  background-color: #b8860b !important;
+  color: #ffffff !important;
+  border-radius: 6px !important;
+}
+
+/* 时间轴与刻度线：温润细线，去除生硬冷灰 */
+.schedule-x-theme-linzi .sx__time-grid-day-line,
+.schedule-x-theme-linzi .sx__time-grid-day-hour {
+  border-color: #ede4d6 !important;
+}
+.schedule-x-theme-linzi .sx__time-grid-day-axis-label {
+  color: #a98f7b !important;
+  font-size: 11px !important;
+  font-family: var(--font-mono);
+}
+
+/* 事件卡片精致化：小圆角、轻阴影、悬浮微动效 */
+.schedule-x-theme-linzi .sx__time-grid-event,
+.schedule-x-theme-linzi .sx__date-grid-event {
+  border-radius: 6px !important;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(61, 43, 31, 0.08) !important;
+  border-left-width: 3px !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  padding: 3px 6px !important;
+}
 .schedule-x-theme-linzi .sx__time-grid-event:hover,
 .schedule-x-theme-linzi .sx__date-grid-event:hover {
-  transform: scale(1.01);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px) scale(1.008);
+  box-shadow: 0 4px 8px rgba(61, 43, 31, 0.12) !important;
 }
+.schedule-x-theme-linzi .sx__time-grid-event-title {
+  font-family: var(--font-serif);
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
 

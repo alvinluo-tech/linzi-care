@@ -125,26 +125,6 @@ export default function AdminCalendarPage() {
         </div>
       </div>
 
-      {/* 状态色例图例 */}
-      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border/80 bg-paper/60 px-4 py-2.5 text-xs">
-        <span className="font-serif font-medium text-bark-700">客单状态图例：</span>
-        <span className="flex items-center gap-1.5 text-bark-600">
-          <span className="size-2.5 rounded-full bg-amber-500" /> 待确认
-        </span>
-        <span className="flex items-center gap-1.5 text-bark-600">
-          <span className="size-2.5 rounded-full bg-bronze-500" /> 已确认
-        </span>
-        <span className="flex items-center gap-1.5 text-bark-600">
-          <span className="size-2.5 rounded-full bg-sky-500" /> 已到店
-        </span>
-        <span className="flex items-center gap-1.5 text-bark-600">
-          <span className="size-2.5 rounded-full bg-emerald-500" /> 已完成
-        </span>
-        <span className="flex items-center gap-1.5 text-bark-400">
-          <span className="size-2.5 rounded-full bg-stone-400" /> 已取消 / 未到店
-        </span>
-      </div>
-
       {/* Schedule-X 现代日历核心视图 */}
       {appointments === null ? (
         <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-xs">
