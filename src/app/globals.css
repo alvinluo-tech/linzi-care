@@ -291,6 +291,15 @@
   border-color: #ddbe72 !important;
 }
 
+/* 箭头按钮依赖 font-size:0 隐藏内部本地化文字（箭头由 CSS border 绘制），
+   必须恢复为 0，否则会显示出重叠的中文乱字 */
+.schedule-x-theme-linzi .sx__forward-backward-navigation button.sx__chevron-wrapper {
+  font-size: 0 !important;
+}
+.schedule-x-theme-linzi .sx__forward-backward-navigation button.sx__chevron-wrapper .sx__chevron {
+  border-color: #7e6350 !important;
+}
+
 /* 视图选择下拉菜单深度定制：宣纸白底、宋代深木棕字、金铜 hover */
 .schedule-x-theme-linzi .sx__view-selection-items {
   background-color: #fffdf9 !important;
