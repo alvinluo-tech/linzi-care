@@ -225,3 +225,32 @@
     animation: none !important;
   }
 }
+
+/* Schedule-X 新中式轻奢主题定制 */
+.schedule-x-theme-linzi {
+  --sx-color-primary: #b8860b;
+  --sx-color-on-primary: #ffffff;
+  --sx-color-surface: var(--card);
+  --sx-color-surface-dim: var(--secondary);
+  --sx-color-on-surface: var(--foreground);
+  --sx-color-surface-container: var(--card);
+  --sx-color-surface-container-high: var(--secondary);
+  --sx-color-outline: var(--border);
+  --sx-color-outline-variant: var(--border);
+  font-family: var(--font-sans);
+}
+
+.schedule-x-theme-linzi .sx__time-grid-event,
+.schedule-x-theme-linzi .sx__date-grid-event {
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.schedule-x-theme-linzi .sx__time-grid-event:hover,
+.schedule-x-theme-linzi .sx__date-grid-event:hover {
+  transform: scale(1.01);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+}
+

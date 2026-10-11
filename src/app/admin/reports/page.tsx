@@ -1,40 +1,75 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import {
+  TrendingUp,
+  Award,
+  Users,
+  CheckCircle2,
+  CalendarCheck2,
+  Sparkles,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import { dateKey, formatCNY, startOfLocalDay } from "@/lib/format";
-import type {
-  Appointments,
-  Members,
-  Services,
-  Staff,
-} from "@/lib/types";
+import type { Appointments, Members, Services, Staff } from "@/lib/types";
 
 interface ReportData {
-  appointments: (Appointments & { services: { name: string } | null })[];
+  appointments: (Appointments & { services: { name: string; price: number } | null })[];
   services: Services[];
   staff: Staff[];
   members: Members[];
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  done: "#10b981",       // emerald
+  confirmed: "#b8860b",  // bronze
+  arrived: "#0284c7",    // sky
+  pending: "#f59e0b",    // amber
+  cancelled: "#f43f5e",  // rose
+  no_show: "#78716c",    // stone
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  done: "已完成",
+  confirmed: "已确认",
+  arrived: "已到店",
+  pending: "待确认",
+  cancelled: "已取消",
+  no_show: "未到店",
+};
+
 export default function AdminReportsPage() {
-  // 默认统计区间在挂载后初始化（预渲染期不能调用 new Date()）
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [data, setData] = useState<ReportData | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const now = new Date();
+    setFrom(dateKey(new Date(now.getFullYear(), now.getMonth(), 1)));
+    setTo(dateKey(startOfLocalDay(now)));
+  }, []);
 
   const load = useCallback(async () => {
     if (!from || !to) return;
@@ -43,32 +78,28 @@ export default function AdminReportsPage() {
     const endIso = new Date(`${to}T23:59:59.999`).toISOString();
 
     const [aptRes, servicesRes, staffRes, membersRes] = await Promise.all([
-      supabase
-        .from("appointments")
-        .select("*, services(name)")
-        .gte("start_time", startIso)
-        .lte("start_time", endIso)
-        .order("start_time"),
-      supabase.from("services").select("*"),
-      supabase.from("staff").select("*"),
-      supabase.from("members").select("*"),
+      q(() =>
+        supabase
+          .from("appointments")
+          .select("*, services(name, price)")
+          .gte("start_time", startIso)
+          .lte("start_time", endIso)
+          .order("start_time")
+      ),
+      q(() => supabase.from("services").select("*")),
+      q(() => supabase.from("staff").select("*")),
+      q(() => supabase.from("members").select("*")),
     ]);
 
     setData({
       appointments:
-        (aptRes.data as (Appointments & { services: { name: string } | null })[]) ??
+        (aptRes.data as (Appointments & { services: { name: string; price: number } | null })[]) ??
         [],
       services: (servicesRes.data as Services[]) ?? [],
       staff: (staffRes.data as Staff[]) ?? [],
       members: (membersRes.data as Members[]) ?? [],
     });
   }, [from, to]);
-
-  useEffect(() => {
-    const now = new Date();
-    setFrom(dateKey(new Date(now.getFullYear(), now.getMonth(), 1)));
-    setTo(dateKey(startOfLocalDay(now)));
-  }, []);
 
   useEffect(() => {
     void load();
@@ -86,27 +117,64 @@ export default function AdminReportsPage() {
     const noShow = apts.filter((a) => a.status === "no_show");
     const priceOf = (serviceId: string) =>
       data.services.find((s) => s.id === serviceId)?.price ?? 0;
-    const revenue = done.reduce(
-      (sum, a) => sum + Number(priceOf(a.service_id)),
-      0
-    );
 
-    const byService = new Map<string, { count: number; revenue: number }>();
+    const revenue = done.reduce((sum, a) => sum + Number(priceOf(a.service_id)), 0);
+
+    // 1. 每日营收与客次趋势
+    const dailyMap = new Map<string, { date: string; revenue: number; count: number }>();
+    for (const a of apts) {
+      const day = dateKey(new Date(a.start_time));
+      const cur = dailyMap.get(day) ?? { date: day.slice(5), revenue: 0, count: 0 };
+      if (a.status === "done") {
+        cur.revenue += Number(priceOf(a.service_id));
+      }
+      if (a.status !== "cancelled") {
+        cur.count += 1;
+      }
+      dailyMap.set(day, cur);
+    }
+    const trendData = [...dailyMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => v);
+
+    // 2. 热门服务 Top 6
+    const byService = new Map<string, { name: string; count: number; revenue: number }>();
     for (const a of apts) {
       if (!["done", "arrived", "confirmed"].includes(a.status)) continue;
       const name = a.services?.name ?? "未知项目";
-      const prev = byService.get(name) ?? { count: 0, revenue: 0 };
+      const prev = byService.get(name) ?? { name, count: 0, revenue: 0 };
       byService.set(name, {
+        name,
         count: prev.count + 1,
         revenue: prev.revenue + (a.status === "done" ? Number(priceOf(a.service_id)) : 0),
       });
     }
+    const serviceRanking = [...byService.values()]
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 6);
 
-    const byStaff = new Map<string, number>();
+    // 3. 技师接单负载
+    const byStaff = new Map<string, { name: string; count: number; doneCount: number }>();
     for (const a of apts) {
       if (a.status === "cancelled") continue;
-      byStaff.set(a.staff_id, (byStaff.get(a.staff_id) ?? 0) + 1);
+      const staffName = data.staff.find((s) => s.id === a.staff_id)?.name ?? "未知工匠";
+      const prev = byStaff.get(staffName) ?? { name: staffName, count: 0, doneCount: 0 };
+      if (a.status === "done") prev.doneCount += 1;
+      prev.count += 1;
+      byStaff.set(staffName, prev);
     }
+    const staffRanking = [...byStaff.values()].sort((a, b) => b.count - a.count);
+
+    // 4. 预约状态构成
+    const statusMap = new Map<string, number>();
+    for (const a of apts) {
+      statusMap.set(a.status, (statusMap.get(a.status) ?? 0) + 1);
+    }
+    const statusData = [...statusMap.entries()].map(([st, val]) => ({
+      name: STATUS_LABELS[st] ?? st,
+      value: val,
+      color: STATUS_COLORS[st] ?? "#a8a29e",
+    }));
 
     const newMembers = data.members.filter((m) => {
       const created = new Date(m.created_at);
@@ -121,48 +189,45 @@ export default function AdminReportsPage() {
       doneCount: done.length,
       cancelledCount: cancelled.length,
       noShowCount: noShow.length,
-      completionRate:
-        apts.length === 0 ? 0 : Math.round((done.length / apts.length) * 100),
+      completionRate: apts.length === 0 ? 0 : Math.round((done.length / apts.length) * 100),
       revenue,
-      byService: [...byService.entries()]
-        .map(([name, v]) => ({ name, ...v }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5),
-      byStaff: [...byStaff.entries()]
-        .map(([staffId, count]) => ({
-          name: data.staff.find((s) => s.id === staffId)?.name ?? "未知",
-          count,
-        }))
-        .sort((a, b) => b.count - a.count),
+      trendData,
+      serviceRanking,
+      staffRanking,
+      statusData,
       newMembers: newMembers.length,
       balanceSum: data.members.reduce((sum, m) => sum + Number(m.balance), 0),
     };
   }, [data, from, to]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="space-y-8">
+      {/* 标题与日期筛选 */}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border/70 pb-5">
         <div>
-          <h1 className="font-serif text-2xl text-bark-800">基础报表</h1>
-          <p className="mt-1 text-sm text-bark-400">按日期区间统计预约与经营概况</p>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="size-5 text-bronze-600" />
+            <h1 className="font-serif text-2xl text-bark-800">经营数据洞察 · 报表分析</h1>
+          </div>
+          <p className="mt-1 text-xs text-bark-400">
+            多维度统计营收走势、客流曲线、服务项目吸金力与技师负荷分布
+          </p>
         </div>
-        <div className="flex items-end gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs">开始日期</Label>
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 text-xs shadow-xs">
+          <div className="flex items-center gap-1.5">
+            <Label className="text-bark-500 font-normal">统计区间：</Label>
             <Input
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-40"
+              className="h-8 w-36 text-xs"
             />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">结束日期</Label>
+            <span className="text-bark-300">至</span>
             <Input
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-40"
+              className="h-8 w-36 text-xs"
             />
           </div>
         </div>
@@ -176,121 +241,373 @@ export default function AdminReportsPage() {
         </div>
       ) : (
         <>
+          {/* 核心指标 KPI 卡片 */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="预约总数" value={String(stats.total)} />
-            <Stat label="已完成" value={String(stats.doneCount)} />
-            <Stat
-              label="完成率"
-              value={`${stats.completionRate}%`}
-              sub={`取消 ${stats.cancelledCount} · 爽约 ${stats.noShowCount}`}
+            <KpiCard
+              icon={CalendarCheck2}
+              label="区间预约总次"
+              value={`${stats.total} 单`}
+              sub={`待确认/履约中 ${(stats.total - stats.doneCount - stats.cancelledCount - stats.noShowCount)} 单`}
             />
-            <Stat
-              label="营收（已完成）"
+            <KpiCard
+              icon={CheckCircle2}
+              label="实际履约完成"
+              value={`${stats.doneCount} 单`}
+              sub={`履约完成率 ${stats.completionRate}%`}
+              highlight
+            />
+            <KpiCard
+              icon={Award}
+              label="履约总营收（已核销）"
               value={formatCNY(stats.revenue)}
+              sub={`取消 ${stats.cancelledCount} · 爽约 ${stats.noShowCount}`}
               accent
             />
-            <Stat label="新增会员" value={String(stats.newMembers)} />
-            <Stat label="会员余额总额" value={formatCNY(stats.balanceSum)} />
+            <KpiCard
+              icon={Users}
+              label="新开会籍 / 总池"
+              value={`${stats.newMembers} 位新增`}
+              sub={`在池会员总余额 ${formatCNY(stats.balanceSum)}`}
+            />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-serif text-lg">热门项目 Top 5</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {stats.byService.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-bark-400">
-                    区间内暂无数据
-                  </p>
+          {/* 营收与客次趋势面积图 (Recharts AreaChart) */}
+          <Card className="border-border/80 shadow-xs">
+            <CardHeader className="flex flex-row items-center justify-between pb-4">
+              <div>
+                <CardTitle className="font-serif text-lg text-bark-800">
+                  每日营收与客流走势
+                </CardTitle>
+                <CardDescription className="text-xs text-bark-400">
+                  实线展示每日核销营收额（元），配合折线跟踪履约客单数（单）
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-4 text-xs">
+                <span className="flex items-center gap-1.5 text-bronze-700 font-medium">
+                  <span className="size-2.5 rounded-full bg-bronze-500" />
+                  营收 (元)
+                </span>
+                <span className="flex items-center gap-1.5 text-bark-500">
+                  <span className="size-2.5 rounded-full bg-bark-400" />
+                  客次 (单)
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-72 w-full">
+                {mounted && stats.trendData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={stats.trendData}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#b8860b" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#b8860b" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e7dcd2" vertical={false} />
+                      <XAxis
+                        dataKey="date"
+                        stroke="#8a7767"
+                        fontSize={11}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        stroke="#8a7767"
+                        fontSize={11}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(v) => `¥${v}`}
+                      />
+                      <Tooltip content={<CustomTrendTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        name="营收"
+                        stroke="#b8860b"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#revenueGrad)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>项目</TableHead>
-                        <TableHead className="text-right">预约数</TableHead>
-                        <TableHead className="text-right">营收</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {stats.byService.map((s) => (
-                        <TableRow key={s.name}>
-                          <TableCell className="text-bark-700">{s.name}</TableCell>
-                          <TableCell className="text-right">{s.count}</TableCell>
-                          <TableCell className="text-right text-bronze-700">
-                            {formatCNY(s.revenue)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-serif text-lg">技师接单排名</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {stats.byStaff.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-bark-400">
-                    区间内暂无数据
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {stats.byStaff.map((s) => {
-                      const max = stats.byStaff[0]?.count || 1;
-                      return (
-                        <div key={s.name}>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-bark-700">{s.name}</span>
-                            <span className="text-bark-500">{s.count} 单</span>
-                          </div>
-                          <div className="mt-1 h-2 overflow-hidden rounded-full bg-secondary">
-                            <div
-                              className="h-full rounded-full bg-bronze-500"
-                              style={{ width: `${(s.count / max) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="flex size-full items-center justify-center text-xs text-bark-400">
+                    统计区间内暂无走势数据
                   </div>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 柱状图 + 饼图组合分析 */}
+          <div className="grid gap-6 lg:grid-cols-12">
+            {/* 热门项目营收贡献 (Recharts BarChart) */}
+            <Card className="border-border/80 shadow-xs lg:col-span-7">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-serif text-lg text-bark-800">
+                  服务项目营收排行 (Top 6)
+                </CardTitle>
+                <CardDescription className="text-xs text-bark-400">
+                  统计区间内各项服务创造的已核销总营收额
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64 w-full">
+                  {mounted && stats.serviceRanking.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={stats.serviceRanking}
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e7dcd2" horizontal={false} />
+                        <XAxis type="number" stroke="#8a7767" fontSize={11} tickFormatter={(v) => `¥${v}`} />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          stroke="#4a382b"
+                          fontSize={12}
+                          width={85}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <Tooltip content={<CustomServiceTooltip />} />
+                        <Bar
+                          dataKey="revenue"
+                          fill="#b8860b"
+                          radius={[0, 4, 4, 0]}
+                          barSize={18}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex size-full items-center justify-center text-xs text-bark-400">
+                      暂无项目服务营收记录
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 客单状态构成环形图 (Recharts PieChart) */}
+            <Card className="border-border/80 shadow-xs lg:col-span-5">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-serif text-lg text-bark-800">
+                  预约状态分布
+                </CardTitle>
+                <CardDescription className="text-xs text-bark-400">
+                  客单转化与履约漏斗占比
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64 w-full">
+                  {mounted && stats.statusData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={stats.statusData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={78}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {stats.statusData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomStatusTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex size-full items-center justify-center text-xs text-bark-400">
+                      暂无预约状态分布数据
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap justify-center gap-3 text-[11px]">
+                  {stats.statusData.map((item) => (
+                    <div key={item.name} className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-bark-600">
+                        {item.name} ({item.value})
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
+
+          {/* 技师接单负载排行 */}
+          <Card className="border-border/80 shadow-xs">
+            <CardHeader className="pb-4">
+              <CardTitle className="font-serif text-lg text-bark-800">
+                技师工匠接单与履约表现
+              </CardTitle>
+              <CardDescription className="text-xs text-bark-400">
+                记录每位调理技师的总接单数与实际完成单数
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stats.staffRanking.length === 0 ? (
+                <p className="py-8 text-center text-xs text-bark-400">暂无技师接单数据</p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {stats.staffRanking.map((s, idx) => {
+                    const rate = s.count > 0 ? Math.round((s.doneCount / s.count) * 100) : 0;
+                    return (
+                      <div
+                        key={s.name}
+                        className="rounded-lg border border-border bg-paper/60 p-4 shadow-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="flex size-6 items-center justify-center rounded-full bg-bronze-100 font-serif text-xs font-bold text-bronze-800">
+                              {idx + 1}
+                            </span>
+                            <span className="font-serif text-sm font-medium text-bark-800">
+                              {s.name}
+                            </span>
+                          </div>
+                          <span className="text-xs font-medium text-bronze-700">
+                            {s.count} 单接单
+                          </span>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-bark-500">
+                          <span>已完成 {s.doneCount} 单</span>
+                          <span>履约率 {rate}%</span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+                          <div
+                            className="h-full rounded-full bg-bronze-500 transition-all duration-500"
+                            style={{ width: `${rate}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>
   );
 }
 
-function Stat({
+function KpiCard({
+  icon: Icon,
   label,
   value,
   sub,
   accent,
+  highlight,
 }: {
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   sub?: string;
   accent?: boolean;
+  highlight?: boolean;
 }) {
   return (
-    <Card className={accent ? "border-bronze-200" : undefined}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-normal text-bark-500">{label}</CardTitle>
+    <Card
+      className={
+        accent
+          ? "border-bronze-300 bg-gradient-to-br from-card to-bronze-50/50 shadow-xs"
+          : highlight
+          ? "border-emerald-200 bg-emerald-50/20 shadow-xs"
+          : "border-border shadow-xs"
+      }
+    >
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-xs font-normal text-bark-500">{label}</CardTitle>
+        <Icon
+          className={`size-4 ${
+            accent
+              ? "text-bronze-600"
+              : highlight
+              ? "text-emerald-600"
+              : "text-bark-300"
+          }`}
+        />
       </CardHeader>
       <CardContent>
         <p
-          className={`font-serif text-2xl ${accent ? "text-bronze-700" : "text-bark-800"}`}
+          className={`font-serif text-2xl font-semibold ${
+            accent ? "text-bronze-700" : highlight ? "text-emerald-700" : "text-bark-800"
+          }`}
         >
           {value}
         </p>
-        {sub && <p className="mt-1 text-xs text-bark-400">{sub}</p>}
+        {sub && <p className="mt-1.5 text-[11px] text-bark-400">{sub}</p>}
       </CardContent>
     </Card>
   );
+}
+
+interface TooltipPayloadItem {
+  value: number;
+  name?: string;
+  color?: string;
+  payload: Record<string, unknown>;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: string | number;
+}
+
+function CustomTrendTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rounded-lg border border-bronze-200 bg-card p-3 shadow-md">
+        <p className="font-serif text-xs font-medium text-bark-800">{String(label)}</p>
+        <p className="mt-1 text-sm font-semibold text-bronze-700">
+          营收：{formatCNY(payload[0].value)}
+        </p>
+      </div>
+    );
+  }
+  return null;
+}
+
+function CustomServiceTooltip({ active, payload }: CustomTooltipProps) {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as { name: string; revenue: number; count: number };
+    return (
+      <div className="rounded-lg border border-bronze-200 bg-card p-3 shadow-md">
+        <p className="font-serif text-xs font-medium text-bark-800">{data.name}</p>
+        <p className="mt-1 text-sm font-semibold text-bronze-700">
+          创收：{formatCNY(data.revenue)}
+        </p>
+        <p className="text-xs text-bark-500">累计预约：{data.count} 次</p>
+      </div>
+    );
+  }
+  return null;
+}
+
+function CustomStatusTooltip({ active, payload }: CustomTooltipProps) {
+  if (active && payload && payload.length) {
+    const data = payload[0];
+    const itemPayload = data.payload as { color?: string };
+    return (
+      <div className="rounded-lg border border-border bg-card p-2.5 shadow-md text-xs">
+        <span style={{ color: itemPayload.color }} className="font-medium">
+          {data.name}
+        </span>
+        <span className="ml-2 font-semibold text-bark-800">{data.value} 单</span>
+      </div>
+    );
+  }
+  return null;
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ColumnDef } from "@tanstack/react-table";
+import { ArrowUpDown, Edit, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,19 +17,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { DataTable } from "@/components/ui/data-table";
 import { AccountActions } from "@/components/admin/account-actions";
 import { CredentialsDialog } from "@/components/credentials-dialog";
 import { invokeFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
+import { cn } from "@/lib/utils";
 import type { Profiles, Staff } from "@/lib/types";
 
 interface StaffRow extends Staff {
@@ -53,10 +49,11 @@ export default function AdminStaffPage() {
   const load = useCallback(async () => {
     const supabase = createClient();
     const [staffRes, profilesRes] = await Promise.all([
-      supabase.from("staff").select("*").order("sort_order"),
-      supabase.from("profiles").select("id, phone, email"),
+      q(() => supabase.from("staff").select("*").order("sort_order")),
+      q(() => supabase.from("profiles").select("id, phone, email")),
     ]);
-    const profiles = (profilesRes.data as Pick<Profiles, "id" | "phone" | "email">[]) ?? [];
+    const profiles =
+      (profilesRes.data as Pick<Profiles, "id" | "phone" | "email">[]) ?? [];
     setRows(
       ((staffRes.data as Staff[]) ?? []).map((s) => ({
         ...s,
@@ -83,10 +80,10 @@ export default function AdminStaffPage() {
       setCredentials(data);
       setCreateOpen(false);
       setForm({ name: "", email: "", phone: "", title: "", bio: "" });
-      toast.success("员工账号已创建");
+      toast.success("员工工匠账号已开立");
       void load();
     } catch (e) {
-      toast.error("创建失败", { description: (e as Error).message });
+      toast.error("开立失败", { description: (e as Error).message });
     } finally {
       setSubmitting(false);
     }
@@ -95,232 +92,306 @@ export default function AdminStaffPage() {
   const saveEdit = async () => {
     if (!editing) return;
     setSubmitting(true);
-    const { error } = await createClient()
-      .from("staff")
-      .update({
-        name: editing.name,
-        title: editing.title,
-        bio: editing.bio,
-        sort_order: editing.sort_order,
-        is_active: editing.is_active,
-      })
-      .eq("id", editing.id);
+    const { error } = await q(() =>
+      createClient()
+        .from("staff")
+        .update({
+          name: editing.name,
+          title: editing.title,
+          bio: editing.bio,
+          sort_order: editing.sort_order,
+          is_active: editing.is_active,
+        })
+        .eq("id", editing.id)
+    );
     setSubmitting(false);
     if (error) {
       toast.error("保存失败", { description: error.message });
       return;
     }
-    toast.success("已保存");
+    toast.success("工匠资料已保存");
     setEditing(null);
     void load();
   };
 
   const toggleBusiness = async (row: StaffRow, active: boolean) => {
-    const { error } = await createClient()
-      .from("staff")
-      .update({ is_active: active })
-      .eq("id", row.id);
+    const { error } = await q(() =>
+      createClient()
+        .from("staff")
+        .update({ is_active: active })
+        .eq("id", row.id)
+    );
     if (error) throw new Error(error.message);
   };
 
+  const columns = useMemo<ColumnDef<StaffRow>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3 h-8 text-xs font-serif font-medium text-bark-800"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            技师姓名 / 头衔
+            <ArrowUpDown className="ml-1 size-3 text-bark-400" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const s = row.original;
+          return (
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-bark-700 font-serif text-xs font-semibold text-ivory">
+                {s.name.slice(0, 1)}
+              </span>
+              <div>
+                <p className="font-serif font-medium text-bark-800">{s.name}</p>
+                <p className="text-[11px] text-bronze-700">{s.title ?? "理疗师"}</p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "contact",
+        header: "联系电话 / 登录账号",
+        cell: ({ row }) => {
+          const s = row.original;
+          return (
+            <div className="text-xs">
+              <p className="font-medium text-bark-700">
+                {s.profile?.phone ?? s.profile?.email ?? "未留电话"}
+              </p>
+              <p className="font-mono text-[11px] text-bark-400">
+                {s.profile?.email ?? ""}
+              </p>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "sort_order",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3 h-8 text-xs font-serif font-medium text-bark-800"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            排序权重
+            <ArrowUpDown className="ml-1 size-3 text-bark-400" />
+          </Button>
+        ),
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-bark-500">
+            {row.original.sort_order}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "is_active",
+        header: "在职执操状态",
+        cell: ({ row }) => {
+          const active = row.original.is_active;
+          return (
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide",
+                active
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-stone-300 bg-stone-100 text-stone-500"
+              )}
+            >
+              {active ? "在岗接单" : "停工离休"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">账号管理与手令</div>,
+        cell: ({ row }) => {
+          const s = row.original;
+          return (
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-bark-700 hover:bg-secondary"
+                onClick={() => setEditing(s)}
+              >
+                <Edit className="mr-1 size-3 text-bark-400" /> 编辑资料
+              </Button>
+              <AccountActions
+                userId={s.user_id}
+                email={s.profile?.email ?? null}
+                active={s.is_active}
+                name={s.name}
+                onToggleBusiness={(active) => toggleBusiness(s, active)}
+                onChanged={() => void load()}
+              />
+            </div>
+          );
+        },
+      },
+    ],
+    [load]
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* 头部控制 */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-5">
         <div>
-          <h1 className="font-serif text-2xl text-bark-800">员工管理</h1>
-          <p className="mt-1 text-sm text-bark-400">
-            创建员工账号后，凭证仅展示一次，请线下告知员工
+          <div className="flex items-center gap-2">
+            <Users className="size-5 text-bronze-600" />
+            <h1 className="font-serif text-2xl text-bark-800">员工与技师工匠名册</h1>
+          </div>
+          <p className="mt-1 text-xs text-bark-400">
+            录入员工工号并生成一次性凭证 · 随时重置登录密码或办理在岗停发操作
           </p>
         </div>
         <Button
           onClick={() => setCreateOpen(true)}
-          className="bg-bronze-500 text-white hover:bg-bronze-600"
+          className="h-9 bg-bronze-500 text-xs text-white hover:bg-bronze-600"
         >
-          <Plus /> 创建员工账号
+          <Plus className="mr-1 size-3.5" /> 录入新员工工号
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>姓名 / 职位</TableHead>
-              <TableHead>联系方式</TableHead>
-              <TableHead className="w-20">状态</TableHead>
-              <TableHead className="w-16">排序</TableHead>
-              <TableHead className="min-w-72">账号操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows === null ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={5}>
-                    <Skeleton className="h-8 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-12 text-center text-sm text-bark-400">
-                  还没有员工，点击右上角创建
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <p className="font-medium text-bark-800">{row.name}</p>
-                    <p className="text-xs text-bark-400">{row.title ?? "—"}</p>
-                  </TableCell>
-                  <TableCell className="text-sm text-bark-600">
-                    <p>{row.profile?.email ?? row.profile?.phone ?? "—"}</p>
-                    <p className="text-xs text-bark-400">
-                      {row.profile?.phone ?? ""}
-                    </p>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`rounded-sm border px-2 py-0.5 text-xs ${
-                        row.is_active
-                          ? "border-emerald-200 bg-emerald-100 text-emerald-800"
-                          : "border-stone-300 bg-stone-200 text-stone-600"
-                      }`}
-                    >
-                      {row.is_active ? "在岗" : "停用"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm text-bark-500">
-                    {row.sort_order}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(row)}
-                      >
-                        编辑资料
-                      </Button>
-                      <AccountActions
-                        userId={row.user_id}
-                        email={row.profile?.email ?? null}
-                        active={row.is_active}
-                        name={row.name}
-                        onToggleBusiness={(active) => toggleBusiness(row, active)}
-                        onChanged={() => void load()}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {/* TanStack Table */}
+      {rows === null ? (
+        <div className="space-y-3 rounded-xl border border-border bg-card p-6 shadow-xs">
+          <Skeleton className="h-9 w-64" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          searchPlaceholder="输入技师姓名或电话即时搜索..."
+          emptyText="暂无符合条件的工匠记录"
+        />
+      )}
 
-      {/* 创建员工 */}
+      {/* 创建员工弹窗 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">创建员工账号</DialogTitle>
+            <DialogTitle className="font-serif">录入新员工账号</DialogTitle>
             <DialogDescription>
-              系统自动生成初始密码，创建成功后弹窗展示一次。
+              系统将自动生成 16 位初始凭证，创建成功后仅此一次弹窗展示。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Field label="姓名" required>
+            <Field label="姓名尊称" required>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="员工真实姓名"
+                placeholder="例如：林小梓"
+                className="h-9 text-xs"
               />
             </Field>
-            <Field label="登录邮箱" required>
+            <Field label="登录账号 / 邮箱" required>
               <Input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="用于登录，如 staff@example.com"
+                placeholder="例如：staff.lin@linzi.com"
+                className="h-9 text-xs"
               />
             </Field>
-            <Field label="手机号">
+            <Field label="联系电话">
               <Input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="11位手机号码"
+                className="h-9 text-xs"
               />
             </Field>
-            <Field label="职位头衔">
+            <Field label="职位头衔 / 职级">
               <Input
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="如：高级技师"
+                placeholder="如：金牌调理师 / 高级理疗技师"
+                className="h-9 text-xs"
               />
             </Field>
-            <Field label="简介（展示在预约页）">
+            <Field label="技艺师承与个人简介（展示于前台预约卡）">
               <Textarea
                 rows={2}
                 value={form.bio}
                 onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                placeholder="擅长项目手法、从艺资历等"
+                className="text-xs"
               />
             </Field>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)}>
               取消
             </Button>
             <Button
               onClick={createStaff}
+              size="sm"
               disabled={submitting || !form.name.trim() || !form.email.trim()}
               className="bg-bronze-500 text-white hover:bg-bronze-600"
             >
-              {submitting ? "创建中…" : "创建账号"}
+              {submitting ? "建号中…" : "开立账号"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 编辑员工资料 */}
+      {/* 编辑员工资料弹窗 */}
       <Dialog open={Boolean(editing)} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">编辑员工资料</DialogTitle>
+            <DialogTitle className="font-serif">编辑员工名册资料</DialogTitle>
             <DialogDescription>
-              登录邮箱不可修改；如需更换请删除后重建账号。
+              登录邮箱账号为系统唯一身份主键，不可随意更改。
             </DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="space-y-4">
-              <Field label="姓名" required>
+              <Field label="姓名尊称" required>
                 <Input
                   value={editing.name}
                   onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  className="h-9 text-xs"
                 />
               </Field>
               <Field label="职位头衔">
                 <Input
                   value={editing.title ?? ""}
                   onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                  className="h-9 text-xs"
                 />
               </Field>
-              <Field label="简介">
+              <Field label="技艺简介">
                 <Textarea
                   rows={2}
                   value={editing.bio ?? ""}
                   onChange={(e) => setEditing({ ...editing, bio: e.target.value })}
+                  className="text-xs"
                 />
               </Field>
-              <Field label="排序（越小越靠前）">
+              <Field label="排序权重（越小越靠前）">
                 <Input
                   type="number"
                   value={editing.sort_order}
                   onChange={(e) =>
                     setEditing({ ...editing, sort_order: Number(e.target.value) })
                   }
+                  className="h-9 text-xs"
                 />
               </Field>
-              <div className="flex items-center justify-between rounded-md bg-secondary/60 px-3 py-2">
-                <span className="text-sm text-bark-600">在岗（可被顾客预约）</span>
+              <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-3 py-2">
+                <span className="text-xs text-bark-600">在岗执操（可被顾客预约选派）</span>
                 <Switch
                   checked={editing.is_active}
                   onCheckedChange={(v) => setEditing({ ...editing, is_active: v })}
@@ -329,20 +400,22 @@ export default function AdminStaffPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
               取消
             </Button>
             <Button
               onClick={saveEdit}
+              size="sm"
               disabled={submitting}
               className="bg-bark-700 text-ivory hover:bg-bark-600"
             >
-              {submitting ? "保存中…" : "保存"}
+              {submitting ? "保存中…" : "更新资料"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* 一次性凭证弹窗 */}
       {credentials && (
         <CredentialsDialog
           open
@@ -366,7 +439,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label>
+      <Label className="text-xs">
         {label}
         {required && <span className="ml-0.5 text-rose-600">*</span>}
       </Label>

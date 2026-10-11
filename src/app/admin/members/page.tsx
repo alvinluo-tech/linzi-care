@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { History, Plus, Wallet } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ColumnDef } from "@tanstack/react-table";
+import { ArrowUpDown, History, Plus, UserPlus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,18 +17,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { AccountActions } from "@/components/admin/account-actions";
 import { CredentialsDialog } from "@/components/credentials-dialog";
 import { invokeFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import { formatCNY, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BalanceLogs, Members } from "@/lib/types";
@@ -65,10 +60,12 @@ export default function AdminMembersPage() {
   });
 
   const load = useCallback(async () => {
-    const { data } = await createClient()
-      .from("members")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const { data } = await q(() =>
+      createClient()
+        .from("members")
+        .select("*")
+        .order("created_at", { ascending: false })
+    );
     setRows((data as Members[]) ?? []);
   }, []);
 
@@ -112,11 +109,13 @@ export default function AdminMembersPage() {
       return;
     }
     setSubmitting(true);
-    const { error } = await createClient().rpc("admin_update_balance", {
-      p_member_id: balanceTarget.id,
-      p_new_balance: final,
-      p_reason: balanceReason,
-    });
+    const { error } = await q(() =>
+      createClient().rpc("admin_update_balance", {
+        p_member_id: balanceTarget.id,
+        p_new_balance: final,
+        p_reason: balanceReason,
+      })
+    );
     setSubmitting(false);
     if (error) {
       toast.error("调整失败", { description: error.message });
@@ -131,27 +130,31 @@ export default function AdminMembersPage() {
   const openLogs = async (member: Members) => {
     setLogsTarget(member);
     setLogs(null);
-    const { data } = await createClient()
-      .from("balance_logs")
-      .select("*")
-      .eq("member_id", member.id)
-      .order("created_at", { ascending: false })
-      .limit(30);
+    const { data } = await q(() =>
+      createClient()
+        .from("balance_logs")
+        .select("*")
+        .eq("member_id", member.id)
+        .order("created_at", { ascending: false })
+        .limit(30)
+    );
     setLogs((data as BalanceLogs[]) ?? []);
   };
 
   const saveEdit = async () => {
     if (!editing) return;
     setSubmitting(true);
-    const { error } = await createClient()
-      .from("members")
-      .update({
-        name: editing.name,
-        phone: editing.phone,
-        note: editing.note,
-        is_active: editing.is_active,
-      })
-      .eq("id", editing.id);
+    const { error } = await q(() =>
+      createClient()
+        .from("members")
+        .update({
+          name: editing.name,
+          phone: editing.phone,
+          note: editing.note,
+          is_active: editing.is_active,
+        })
+        .eq("id", editing.id)
+    );
     setSubmitting(false);
     if (error) {
       toast.error("保存失败", { description: error.message });
@@ -162,178 +165,252 @@ export default function AdminMembersPage() {
     void load();
   };
 
+  // TanStack Table 列配置
+  const columns = useMemo<ColumnDef<Members>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3 h-8 text-xs font-serif font-medium text-bark-800"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            会员尊称
+            <ArrowUpDown className="ml-1 size-3 text-bark-400" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div>
+              <p className="font-serif font-medium text-bark-800">{m.name}</p>
+              <p className="text-[11px] text-bark-400">
+                {m.note ? m.note : formatDateTime(m.created_at) + " 入籍"}
+              </p>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "phone",
+        header: "联系电话 / 登录账号",
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div className="text-xs">
+              <p className="font-medium text-bark-700">{m.phone ?? "未留手机"}</p>
+              <p className="font-mono text-[11px] text-bark-400">{m.email ?? ""}</p>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "balance",
+        header: ({ column }) => (
+          <div className="text-right">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-mr-3 h-8 text-xs font-serif font-medium text-bark-800"
+              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            >
+              账户余额
+              <ArrowUpDown className="ml-1 size-3 text-bark-400" />
+            </Button>
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="text-right">
+            <span className="font-serif text-base font-semibold text-bronze-700">
+              {formatCNY(row.original.balance)}
+            </span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "is_active",
+        header: "会籍状态",
+        cell: ({ row }) => {
+          const active = row.original.is_active;
+          return (
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide",
+                active
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-stone-300 bg-stone-100 text-stone-500"
+              )}
+            >
+              {active ? "正籍有效" : "休眠停用"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">操作手令</div>,
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-bronze-700 hover:bg-bronze-50"
+                onClick={() => {
+                  setBalanceTarget(m);
+                  setBalanceMode("set");
+                  setBalanceAmount(String(m.balance));
+                }}
+              >
+                <Wallet className="mr-1 size-3 text-bronze-600" /> 调余额
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-bark-600 hover:bg-secondary"
+                onClick={() => void openLogs(m)}
+              >
+                <History className="mr-1 size-3 text-bark-400" /> 变动流水
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-bark-600 hover:bg-secondary"
+                onClick={() => setEditing(m)}
+              >
+                编辑
+              </Button>
+              <AccountActions
+                userId={m.user_id}
+                email={m.email}
+                active={m.is_active}
+                name={m.name}
+                onToggleBusiness={async (active) => {
+                  const { error } = await q(() =>
+                    createClient()
+                      .from("members")
+                      .update({ is_active: active })
+                      .eq("id", m.id)
+                  );
+                  if (error) throw new Error(error.message);
+                }}
+                onChanged={() => void load()}
+              />
+            </div>
+          );
+        },
+      },
+    ],
+    [load]
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* 头部导航 */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-5">
         <div>
-          <h1 className="font-serif text-2xl text-bark-800">会员管理</h1>
-          <p className="mt-1 text-sm text-bark-400">
-            收付款走微信线下，余额由老板在此手动登记，全程留痕
+          <div className="flex items-center gap-2">
+            <UserPlus className="size-5 text-bronze-600" />
+            <h1 className="font-serif text-2xl text-bark-800">会员名籍与资产管理</h1>
+          </div>
+          <p className="mt-1 text-xs text-bark-400">
+            线下收付款由掌柜在此权威登记 · 实时审计留痕 · 支持即时按姓名与电话检索
           </p>
         </div>
         <Button
           onClick={() => setCreateOpen(true)}
-          className="bg-bronze-500 text-white hover:bg-bronze-600"
+          className="h-9 bg-bronze-500 text-xs text-white hover:bg-bronze-600"
         >
-          <Plus /> 创建会员账号
+          <Plus className="mr-1 size-3.5" /> 录入新会员
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>会员</TableHead>
-              <TableHead>联系方式</TableHead>
-              <TableHead className="text-right">余额</TableHead>
-              <TableHead className="w-20">状态</TableHead>
-              <TableHead className="min-w-64">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows === null ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={5}>
-                    <Skeleton className="h-8 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-12 text-center text-sm text-bark-400">
-                  还没有会员，点击右上角创建
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <p className="font-medium text-bark-800">{row.name}</p>
-                    <p className="text-xs text-bark-400">
-                      {row.note ?? formatDateTime(row.created_at) + " 建档"}
-                    </p>
-                  </TableCell>
-                  <TableCell className="text-sm text-bark-600">
-                    <p>{row.phone ?? "—"}</p>
-                    <p className="text-xs text-bark-400">{row.email ?? ""}</p>
-                  </TableCell>
-                  <TableCell className="text-right font-serif text-lg text-bronze-700">
-                    {formatCNY(row.balance)}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={cn(
-                        "rounded-sm border px-2 py-0.5 text-xs",
-                        row.is_active
-                          ? "border-emerald-200 bg-emerald-100 text-emerald-800"
-                          : "border-stone-300 bg-stone-200 text-stone-600"
-                      )}
-                    >
-                      {row.is_active ? "正常" : "停用"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setBalanceTarget(row);
-                          setBalanceMode("set");
-                          setBalanceAmount(String(row.balance));
-                        }}
-                      >
-                        <Wallet /> 调整余额
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => void openLogs(row)}>
-                        <History /> 变动记录
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(row)}>
-                        编辑
-                      </Button>
-                      <AccountActions
-                        userId={row.user_id}
-                        email={row.email}
-                        active={row.is_active}
-                        name={row.name}
-                        onToggleBusiness={async (active) => {
-                          const { error } = await createClient()
-                            .from("members")
-                            .update({ is_active: active })
-                            .eq("id", row.id);
-                          if (error) throw new Error(error.message);
-                        }}
-                        onChanged={() => void load()}
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {/* 数据表格视图 (TanStack Table) */}
+      {rows === null ? (
+        <div className="space-y-3 rounded-xl border border-border bg-card p-6 shadow-xs">
+          <Skeleton className="h-9 w-64" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          searchPlaceholder="输入姓名或手机号搜索会员..."
+          emptyText="未检索到匹配的会员名籍"
+        />
+      )}
 
-      {/* 创建会员 */}
+      {/* 录入会员弹窗 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">创建会员账号</DialogTitle>
+            <DialogTitle className="font-serif">录入新会员账号</DialogTitle>
             <DialogDescription>
-              系统自动生成初始密码，创建成功后弹窗展示一次。
+              系统将自动生成 16 位高强度安全初始凭证，仅此一次弹窗展示。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>
-                姓名<span className="ml-0.5 text-rose-600">*</span>
+              <Label className="text-xs">
+                姓名尊称<span className="ml-0.5 text-rose-600">*</span>
               </Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="例如：张女士"
+                className="h-9 text-xs"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>
-                登录邮箱<span className="ml-0.5 text-rose-600">*</span>
+              <Label className="text-xs">
+                登录账号 / 邮箱<span className="ml-0.5 text-rose-600">*</span>
               </Label>
               <Input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="用于登录与接收预约提醒"
+                placeholder="例如：vip.zhang@linzi.com"
+                className="h-9 text-xs"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>手机号</Label>
+              <Label className="text-xs">联系电话</Label>
               <Input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="11位手机号码"
+                className="h-9 text-xs"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>初始余额（元）</Label>
+              <Label className="text-xs">初始开卡预存金额（元）</Label>
               <Input
                 type="number"
                 min={0}
                 step="0.01"
                 value={form.balance}
                 onChange={(e) => setForm({ ...form, balance: e.target.value })}
-                placeholder="0"
+                placeholder="0.00"
+                className="h-9 text-xs"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)}>
               取消
             </Button>
             <Button
               onClick={createMember}
+              size="sm"
               disabled={submitting || !form.name.trim() || !form.email.trim()}
               className="bg-bronze-500 text-white hover:bg-bronze-600"
             >
-              {submitting ? "创建中…" : "创建账号"}
+              {submitting ? "建卡中…" : "开立会籍"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -346,18 +423,18 @@ export default function AdminMembersPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">调整余额</DialogTitle>
+            <DialogTitle className="font-serif">手动调整会员余额</DialogTitle>
             <DialogDescription>
-              {balanceTarget?.name} 当前余额{" "}
-              {formatCNY(balanceTarget?.balance ?? 0)}，变更将写入审计记录。
+              {balanceTarget?.name} 当前账户结余{" "}
+              {formatCNY(balanceTarget?.balance ?? 0)}，本次调整将永久记入审计流水。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
-                  { key: "set", label: "设为指定余额" },
-                  { key: "delta", label: "增减金额" },
+                  { key: "set", label: "设为指定金额" },
+                  { key: "delta", label: "增减变动差额" },
                 ] as const
               ).map((m) => (
                 <button
@@ -366,15 +443,13 @@ export default function AdminMembersPage() {
                   onClick={() => {
                     setBalanceMode(m.key);
                     setBalanceAmount(
-                      m.key === "set"
-                        ? String(balanceTarget?.balance ?? 0)
-                        : ""
+                      m.key === "set" ? String(balanceTarget?.balance ?? 0) : ""
                     );
                   }}
                   className={cn(
-                    "rounded-md border px-3 py-2 text-sm transition-colors",
+                    "rounded-md border px-3 py-2 text-xs transition-colors",
                     balanceMode === m.key
-                      ? "border-bronze-500 bg-bronze-50 text-bronze-800"
+                      ? "border-bronze-500 bg-bronze-50 font-medium text-bronze-800"
                       : "border-border text-bark-600"
                   )}
                 >
@@ -383,34 +458,39 @@ export default function AdminMembersPage() {
               ))}
             </div>
             <div className="space-y-1.5">
-              <Label>{balanceMode === "set" ? "新余额（元）" : "增减金额（正增负减）"}</Label>
+              <Label className="text-xs">
+                {balanceMode === "set" ? "调整后新余额（元）" : "变动金额（正数充值，负数核销）"}
+              </Label>
               <Input
                 type="number"
                 step="0.01"
                 value={balanceAmount}
                 onChange={(e) => setBalanceAmount(e.target.value)}
+                className="h-9 text-xs"
               />
-              <p className="text-xs text-bark-400">
-                调整后：{" "}
-                {formatCNY(
-                  Number.isNaN(Number(balanceAmount))
-                    ? 0
-                    : balanceMode === "set"
+              <p className="text-[11px] text-bark-400">
+                生效后结余：{" "}
+                <strong className="text-bronze-700">
+                  {formatCNY(
+                    Number.isNaN(Number(balanceAmount))
+                      ? 0
+                      : balanceMode === "set"
                       ? Number(balanceAmount)
                       : Number(balanceTarget?.balance ?? 0) + Number(balanceAmount)
-                )}
+                  )}
+                </strong>
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label>事由</Label>
-              <div className="flex flex-wrap gap-2">
+              <Label className="text-xs">变更款项事由</Label>
+              <div className="flex flex-wrap gap-1.5">
                 {REASONS.map((r) => (
                   <button
                     key={r}
                     type="button"
                     onClick={() => setBalanceReason(r)}
                     className={cn(
-                      "rounded-full border px-3 py-1 text-xs transition-colors",
+                      "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
                       balanceReason === r
                         ? "border-bronze-500 bg-bronze-500 text-white"
                         : "border-border text-bark-500 hover:border-bronze-300"
@@ -423,15 +503,16 @@ export default function AdminMembersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBalanceTarget(null)}>
+            <Button variant="outline" size="sm" onClick={() => setBalanceTarget(null)}>
               取消
             </Button>
             <Button
               onClick={submitBalance}
+              size="sm"
               disabled={submitting || balanceAmount === ""}
               className="bg-bronze-500 text-white hover:bg-bronze-600"
             >
-              {submitting ? "提交中…" : "确认调整"}
+              {submitting ? "提交中…" : "确认入账"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -442,32 +523,32 @@ export default function AdminMembersPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-serif">
-              {logsTarget?.name} · 余额变动记录
+              {logsTarget?.name} · 账户资产变动流水
             </DialogTitle>
-            <DialogDescription>最近 30 条</DialogDescription>
+            <DialogDescription>按发生时间倒序呈现近期30笔记录</DialogDescription>
           </DialogHeader>
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-80 overflow-y-auto pr-1">
             {logs === null ? (
-              <p className="py-6 text-center text-sm text-bark-400">加载中…</p>
+              <p className="py-6 text-center text-xs text-bark-400">流水加载中…</p>
             ) : logs.length === 0 ? (
-              <p className="py-6 text-center text-sm text-bark-400">暂无变动记录</p>
+              <p className="py-6 text-center text-xs text-bark-400">暂无任何余额变更记录</p>
             ) : (
               <div className="space-y-2">
                 {logs.map((log) => (
                   <div
                     key={log.id}
-                    className="flex items-center justify-between rounded-md bg-secondary/60 px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-lg border border-border/70 bg-paper/70 p-3 text-xs"
                   >
                     <div>
-                      <p className="text-bark-700">{log.reason}</p>
-                      <p className="text-xs text-bark-400">
-                        {formatDateTime(log.created_at)} ·{" "}
+                      <p className="font-medium text-bark-800">{log.reason}</p>
+                      <p className="mt-0.5 text-[11px] text-bark-400">
+                        {formatDateTime(log.created_at)} · 结余：
                         {formatCNY(log.old_balance)} → {formatCNY(log.new_balance)}
                       </p>
                     </div>
                     <span
                       className={cn(
-                        "font-medium",
+                        "font-serif text-sm font-semibold",
                         log.delta >= 0 ? "text-emerald-700" : "text-rose-700"
                       )}
                     >
@@ -482,39 +563,41 @@ export default function AdminMembersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 编辑会员 */}
+      {/* 编辑会员资料 */}
       <Dialog open={Boolean(editing)} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif">编辑会员信息</DialogTitle>
-            <DialogDescription>余额请通过「调整余额」操作，全程留痕。</DialogDescription>
+            <DialogTitle className="font-serif">编辑会员基本信息</DialogTitle>
+            <DialogDescription>会籍余额不可在此直接篡改，请走调余额流程。</DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>姓名</Label>
+                <Label className="text-xs">姓名尊称</Label>
                 <Input
                   value={editing.name}
                   onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  className="h-9 text-xs"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>手机号</Label>
+                <Label className="text-xs">联系电话</Label>
                 <Input
                   value={editing.phone ?? ""}
                   onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
+                  className="h-9 text-xs"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>备注</Label>
+                <Label className="text-xs">会籍备注（体质、偏好习惯）</Label>
                 <Input
                   value={editing.note ?? ""}
                   onChange={(e) => setEditing({ ...editing, note: e.target.value })}
-                  placeholder="偏好、注意事项等"
+                  className="h-9 text-xs"
                 />
               </div>
-              <div className="flex items-center justify-between rounded-md bg-secondary/60 px-3 py-2">
-                <span className="text-sm text-bark-600">正常状态</span>
+              <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-3 py-2">
+                <span className="text-xs text-bark-600">正常会籍状态</span>
                 <Switch
                   checked={editing.is_active}
                   onCheckedChange={(v) => setEditing({ ...editing, is_active: v })}
@@ -523,20 +606,22 @@ export default function AdminMembersPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
               取消
             </Button>
             <Button
               onClick={saveEdit}
+              size="sm"
               disabled={submitting}
               className="bg-bark-700 text-ivory hover:bg-bark-600"
             >
-              {submitting ? "保存中…" : "保存"}
+              {submitting ? "保存中…" : "更新会籍"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* 凭证一次性弹窗 */}
       {credentials && (
         <CredentialsDialog
           open
