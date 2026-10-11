@@ -56,7 +56,24 @@
 
 ---
 
-## 5. 验收辅助 SQL
+## 5. 预约确认流程与状态机
+
+状态机：`pending → confirmed → arrived → done`，任意非终态可 `cancelled`，`confirmed/arrived` 可 `no_show`；`done / cancelled / no_show` 为终态，禁止再流转。
+
+| # | 步骤 | 预期 |
+|---|---|---|
+| 5.1 | 顾客在 `/book` 提交预约 | 状态为「待确认」；老板收到 Realtime Toast + 提示音 + PWA 系统横幅三重提醒 |
+| 5.2 | 老板在 `/admin` 或 `/admin/calendar` 点击「确认接单」 | 状态变「已确认」；**顾客自动收到确认通知**（已订阅 → 手机系统横幅，点击跳转 `/my`；未订阅 → Resend 邮件兜底），`notifications` 落库 `type='confirmation'` |
+| 5.3 | 同一预约重复确认（先取消再确认等绕行） | `notifications` 去重，顾客**不会收到第二次**确认通知 |
+| 5.4 | 技师在 `/staff` 尝试「确认接单」 | **被拒**：「技师仅可执行『到店 / 完成 / 未到店』操作，确认与取消请联系老板」 |
+| 5.5 | 技师对自己的客单点「顾客到店」「完成服务」「未到店」 | 正常流转；只能操作分配给自己的单 |
+| 5.6 | 老板把 `confirmed` 改回 `pending`（乱序） | **被拒**：「不允许的状态流转：confirmed → pending」 |
+| 5.7 | 对已 `done` / `cancelled` / `no_show` 的终态单再做任何流转 | **被拒**：终态保护 |
+| 5.8 | 顾客在 `/my` 自行取消 pending/confirmed 的单 | 正常取消；技师单随之释放 |
+
+---
+
+## 6. 验收辅助 SQL
 
 ```sql
 -- 1. 查看 PWA 推送订阅列表

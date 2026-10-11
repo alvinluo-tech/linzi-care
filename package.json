@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "tsx tests/e2e/run-all.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -33,6 +34,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "undici": "^8.11.2"
   }
 }

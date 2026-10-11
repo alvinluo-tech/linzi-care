@@ -22,6 +22,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Supabase Edge Functions 为 Deno 代码，不参与 Next.js lint
     "supabase/**",
+    // E2E 测试独立运行，不参与 Next.js lint
+    "tests/**",
   ]),
 ]);
 
