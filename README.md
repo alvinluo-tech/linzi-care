@@ -1,67 +1,133 @@
-# 梓养云 · 轻约版（linzi-care）
+# Linzi Care · 梓养云
 
-林梓精养馆（广州增城新塘国贸汇店）预约与人员管理系统 · 单店 MVP。
-新中式轻奢养生风，面向「分配制账号 + 纯展示商城 + 服务端权威余额」的封闭运营场景。
+[![CI](https://github.com/alvinluo-tech/linzi-care/actions/workflows/ci.yml/badge.svg)](https://github.com/alvinluo-tech/linzi-care/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](LICENSE)
+[![Next.js 16.4](https://img.shields.io/badge/Next.js-16.4-black)](https://nextjs.org)
+[![React 19.3](https://img.shields.io/badge/React-19.3-blue)](https://react.dev)
+[![Supabase](https://img.shields.io/badge/Supabase-Postgres%2017-3ECF8E)](https://supabase.com)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
----
+A refined appointment and member management platform for boutique wellness studios. Built as a single-store MVP with a **closed account model** (no public signup), a **display-only storefront**, and a **server-authoritative member balance** — styled in a modern Chinese-inspired light-luxury aesthetic.
 
-## ⚡ 现成云端环境（已全量连通并就绪）
+> 梓养云 · 轻约版 —— 面向精品养生馆的预约与会员管理系统：分配制账号 · 纯展示商城 · 服务端权威余额。
 
-项目已成功连接到你的 Supabase 项目 `linzi-care`（`bzjsbiafxxgljbdcreqf`），数据库结构、20 个真实项目种子数据、3 个 Edge Functions 与定时任务已全部部署并验证通过。
+## Highlights
 
-### 系统初始账号凭证（可直接用于本地与生产测试）
+- **Conflict-free booking engine** — a transactional Postgres RPC validates staff schedules and overlapping appointments, guarded by a per-technician advisory lock and a partial unique index. Cancelled / no-show slots free up automatically.
+- **Server-authoritative balances** — the `balance` column privilege is revoked from all authenticated roles; updates flow exclusively through an audited RPC (`admin_update_balance`) protected by a database trigger, with every change recorded in `balance_logs`.
+- **Row-level security end to end** — `user_roles` is the single source of truth; customers see only their own bookings, staff only their own schedule and assigned appointments, and the owner has full control. Frontend bugs cannot leak data.
+- **Assigned accounts, credentials shown once** — the owner creates staff/customer accounts from the admin console; an Edge Function calls the Admin API with `service_role`, generates a random password, and displays it exactly once.
+- **Realtime admin console** — appointment inserts stream over Supabase Realtime with toast + chime notification, no refresh needed.
+- **PWA with layered reminders** — installable manifest, Service Worker, and Web Push (VAPID) notifications before each appointment, with automatic email fallback via Resend for unsubscribed users.
+- **Scheduled jobs on the free tier** — `pg_cron` + `pg_net` drive reminder scans every 15 minutes, plus a daily heartbeat against free-tier auto-pause.
 
-| 角色 | 姓名 | 登录账号 | 登录密码 | 权限与访问入口 |
-|---|---|---|---|---|
-| **老板 (admin)** | 林梓老板 | `admin@linzi.com` | `LinziAdmin2026!#` | 管理端全权限：[`/admin`](http://localhost:3002/admin)（仪表盘、预约日历、员工、会员、余额调整、排班、报表） |
-| **员工 (staff)** | 林小梓 | `staff.lin@linzi.com` | `StaffLin2026!#` | 员工端只读：[`/staff`](http://localhost:3002/staff)（查看未来 14 天排班与被分配的预约） |
-| **会员 (customer)** | 张女士 | `vip.zhang@linzi.com` | `VipZhang2026!#` | 顾客端：[`/my`](http://localhost:3002/my)（在线预约、查看预约历史、余额查询；初始测试余额 ¥520） |
+## Tech Stack
 
----
+| Layer | Technology |
+| --- | --- |
+| Framework | [Next.js 16.4](https://nextjs.org) (App Router, Cache Components / PPR, Turbopack) |
+| UI | [React 19.3](https://react.dev), [Tailwind CSS 4](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com) |
+| Language | TypeScript 5 (strict) |
+| Backend | [Supabase](https://supabase.com) — Postgres 17, PostgREST, Row-Level Security, Realtime, Edge Functions (Deno) |
+| Scheduling | `pg_cron` + `pg_net` |
+| Notifications | Web Push (VAPID), [Resend](https://resend.com) email fallback |
+| Deployment | Vercel (web) + Supabase (backend), free tier friendly |
 
-## 技术栈
+## Getting Started
 
-| 层级 | 技术 | 版本 / 说明 |
-|---|---|---|
-| 前端框架 | Next.js | **16.4.0**（React 19.3，Cache Components / PPR 启用） |
-| 语言与样式 | TypeScript 5 + Tailwind CSS 4 | 新中式轻奢色板（深棕 `#3D2B1F` / 暖米白 `#F5F0E8` / 金铜 `#B8860B`） |
-| UI 组件库 | shadcn/ui | 24 个基础组件（含周视图日历、状态流转抽屉、凭证单次弹窗等） |
-| 后端/数据库 | Supabase | PostgreSQL 17，PostgREST v14，Realtime，Edge Functions（Deno 运行时） |
-| 调度系统 | pg_cron + pg_net | 每小时整点触发邮件提醒 Edge Function，每日早9点心跳防免费休眠 |
+### Prerequisites
 
----
+- Node.js ≥ 20.9 (22 LTS recommended) and npm ≥ 10
+- A [Supabase](https://supabase.com) project (free tier works)
+- (Optional) a Resend API key for email reminders
 
-## 核心设计与安全规范
-
-1. **完全封闭式分配制账号**：不开放公开注册入口。所有账号均由老板在管理端创建；Edge Function 调 Admin API 生成随机密码并在前端**仅弹窗展示一次**，不落文明细。
-2. **纯服务端权威余额**：数据库层施加触发器强制校验 `guard_member_balance_update`，任何人（包括前端直连或越权注入）无法直接执行 UPDATE balance；唯一允许的更新入口是通过安全定义函数 `admin_update_balance` RPC，全量记录新旧余额与操作员审计日志。
-3. **防冲突预约引擎**：通过 `create_appointment` 事务函数执行严格检验（技师有效性、排班区间覆盖、无重叠预约时间）+ Advisory Lock 排他锁，高并发下杜绝撞单。
-4. **数据库级 RLS 行级权限兜底**：顾客仅可读写属于自己的预约及本人资料；员工仅可读取本人的排班和关联预约；老板全权管理。
-
----
-
-## 本地极速启动
+### 1. Clone and install
 
 ```bash
-# 1. 安装依赖 (如果尚未安装)
+git clone https://github.com/alvinluo-tech/linzi-care.git
+cd linzi-care
 npm install
-
-# 2. 启动开发服务器 (自动加载 .env.local 中已配置好的 Supabase 凭据)
-npm run dev
-
-# 访问地址：http://localhost:3002 (或 http://localhost:3000)
 ```
 
-### 常用验证页面：
-- **品牌首页**：[http://localhost:3002/](http://localhost:3002/)（瑶浴文化、三大主业、四大基石、国贸汇门店地址）
-- **服务项目**：[http://localhost:3002/services](http://localhost:3002/services)（20项服务真实价格与会员价双轨展示）
-- **预约体验**：[http://localhost:3002/book](http://localhost:3002/book)（四步预约流，已配置技师林小梓未来14天排班）
-- **颐养商城**：[http://localhost:3002/shop](http://localhost:3002/shop)（纯展示橱窗）
-- **管理后台**：[http://localhost:3002/admin](http://localhost:3002/admin)（使用老板账号登录）
+### 2. Configure environment
 
----
+Copy the example and fill in your Supabase project values (Dashboard → Project Settings → API):
 
-## 交付文档导航
+```bash
+cp .env.example .env.local
+```
 
-- 部署说明与生产指引：[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- 详细验收用例与测试指南：[docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)
+| Variable | Scope | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | public | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | Supabase anon key (safe for the browser; RLS applies) |
+| `RESEND_API_KEY` / `RESEND_FROM` | Edge Function secret | Email reminder delivery |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | public / Edge Function secret | Web Push keys (`npx web-push generate-vapid-keys`) |
+
+Never expose `service_role` keys or Edge Function secrets to the client. Full setup — migrations, Edge Function deployment, cron schedules, and bootstrapping the first owner account — is documented in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+### 3. Run
+
+```bash
+npm run dev        # http://localhost:3000
+npm run build      # production build
+npm run lint
+```
+
+If your network reaches Supabase/GitHub only through a proxy, start the dev server with Node's env-proxy support:
+
+```bash
+NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:7897 npm run dev
+```
+
+Demo accounts for local development are listed in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+## Project Structure
+
+```
+src/
+  app/
+    (site)/          Customer-facing: home, services, booking wizard, shop, login, /my
+    admin/           Owner console: dashboard, calendar, staff, members,
+                     services, products, schedules, reports
+    staff/           Technician view: assigned schedule & appointments
+  components/        Brand elements, booking wizard, admin console, shadcn/ui primitives
+  lib/
+    supabase/        Browser & server clients (@supabase/ssr)
+    auth-server.ts   Server-side session + role resolution (timeout-hardened)
+    types.ts         Database types synced with migrations
+  proxy.ts           Session refresh middleware (Next.js 16 proxy convention)
+supabase/
+  migrations/        0001 schema → 0002 RLS → 0003 RPCs → 0004 seed → …
+  functions/         create-user · manage-user · send-reminder · send-push
+  scripts/           Manual cron setup helper
+docs/
+  DEPLOYMENT.md      Full deployment guide (Supabase → Vercel)
+  ACCEPTANCE.md      Acceptance test cases mapped to requirements
+  DESIGN_PRINCIPLES.md
+```
+
+## Security Model
+
+| Concern | Enforcement |
+| --- | --- |
+| Role-based access | `user_roles` table + RLS policies on every table; `has_role()` helper is `SECURITY DEFINER` to avoid recursion |
+| Member balance | `REVOKE UPDATE (balance)`, a guard trigger that rejects direct updates, and a single audited RPC entry point |
+| Booking conflicts | `create_appointment()` RPC: schedule coverage + overlap checks + `pg_advisory_xact_lock` + partial unique index |
+| Account lifecycle | Edge Functions with admin-JWT verification; passwords generated server-side and shown once |
+
+## Deployment
+
+Deploy the web app to Vercel and the backend to Supabase — both work on free tiers. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the complete, ordered guide, and [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) for the acceptance checklist.
+
+## Contributing
+
+Contributions are welcome!
+
+- Follow [Conventional Commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, `docs:`, `chore:`, …) — commit messages **in English**.
+- Keep changes focused; run `npm run lint` and `npm run build` before opening a PR.
+- UI copy visible to customers is written in Simplified Chinese; code, comments, and commit messages are in English.
+
+## License
+
+Released under the [MIT License](LICENSE).
