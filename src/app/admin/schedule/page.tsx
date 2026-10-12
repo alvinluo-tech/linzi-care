@@ -28,7 +28,7 @@ import {
   addDays,
   formatMD,
   formatTime,
-  startOfWeekMonday,
+  storeWeekStartMonday,
   weekdayLabel,
 } from "@/lib/format";
 import { storeDayBoundsFromLiteral } from "@/lib/format";
@@ -62,7 +62,7 @@ export default function AdminSchedulePage() {
   );
 
   useEffect(() => {
-    setWeekStart(startOfWeekMonday(new Date()));
+    setWeekStart(storeWeekStartMonday(new Date()));
   }, []);
 
   const load = useCallback(async () => {
@@ -177,7 +177,7 @@ export default function AdminSchedulePage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setWeekStart(startOfWeekMonday(new Date()))}
+              onClick={() => setWeekStart(storeWeekStartMonday(new Date()))}
             >
               本周
             </Button>

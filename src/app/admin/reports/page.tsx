@@ -38,10 +38,27 @@ import {
 import type { Appointments, Members, Services, Staff } from "@/lib/types";
 
 interface ReportData {
-  appointments: (Appointments & { services: { name: string; price: number } | null })[];
+  appointments: (Appointments & {
+    services: { name: string; price: number; member_price: number | null } | null;
+    price_snapshot?: number | null;
+    member_price_snapshot?: number | null;
+  })[];
   services: Services[];
   staff: Staff[];
   members: Members[];
+}
+
+/**
+ * 单笔已完成预约的成交价。
+ * 优先读下单时点的快照（0011 起写入），没有快照的历史单才回退到服务当前会员价/门市价。
+ * 用快照而非服务现价，是为了让「调价」不再追溯改写历史营收；
+ * 会员价优先于门市价，因为会员实际支付的是会员价。
+ */
+function bookedPrice(a: ReportData["appointments"][number]): number {
+  const snapshot = a.member_price_snapshot ?? a.price_snapshot;
+  if (snapshot !== null && snapshot !== undefined) return Number(snapshot);
+  const svc = a.services;
+  return Number(svc?.member_price ?? svc?.price ?? 0);
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -66,6 +83,7 @@ export default function AdminReportsPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [data, setData] = useState<ReportData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -89,7 +107,9 @@ export default function AdminReportsPage() {
       q(() =>
         supabase
           .from("appointments")
-          .select("*, services(name, price)")
+          .select(
+            "*, price_snapshot, member_price_snapshot, services(name, price, member_price)"
+          )
           .gte("start_time", startIso)
           .lt("start_time", endIso)
           .order("start_time")
@@ -102,10 +122,18 @@ export default function AdminReportsPage() {
       q(() => supabase.from("members").select("id, created_at, balance")),
     ]);
 
+    // 任一查询失败都不能把「查不出来」渲染成「本店零营收」：
+    // q() 重试耗尽后返回 error + data=null，继续走 ?? [] 会安静地显示空报表。
+    const failed = [aptRes, servicesRes, staffRes, membersRes].find((r) => r.error);
+    if (failed) {
+      setLoadError(failed.error?.message ?? "数据加载失败");
+      return; // 保留上一次的 data，不清空成空报表
+    }
+    setLoadError(null);
+
     setData({
       appointments:
-        (aptRes.data as (Appointments & { services: { name: string; price: number } | null })[]) ??
-        [],
+        (aptRes.data as ReportData["appointments"]) ?? [],
       services: (servicesRes.data as Services[]) ?? [],
       staff: (staffRes.data as Staff[]) ?? [],
       members: (membersRes.data as Members[]) ?? [],
@@ -126,11 +154,8 @@ export default function AdminReportsPage() {
     const done = apts.filter((a) => a.status === "done");
     const cancelled = apts.filter((a) => a.status === "cancelled");
     const noShow = apts.filter((a) => a.status === "no_show");
-    // O(1) 查价：原来每条预约都对整张 services 做 Array.find（预约数 × 服务数）
-    const priceById = new Map(data.services.map((s) => [s.id, Number(s.price)] as const));
-    const priceOf = (serviceId: string) => priceById.get(serviceId) ?? 0;
 
-    const revenue = done.reduce((sum, a) => sum + Number(priceOf(a.service_id)), 0);
+    const revenue = done.reduce((sum, a) => sum + bookedPrice(a), 0);
 
     // 1. 每日营收与客次趋势
     const dailyMap = new Map<string, { date: string; revenue: number; count: number }>();
@@ -138,7 +163,7 @@ export default function AdminReportsPage() {
       const day = storeDateKey(a.start_time);
       const cur = dailyMap.get(day) ?? { date: day.slice(5), revenue: 0, count: 0 };
       if (a.status === "done") {
-        cur.revenue += Number(priceOf(a.service_id));
+        cur.revenue += bookedPrice(a);
       }
       if (a.status !== "cancelled") {
         cur.count += 1;
@@ -158,7 +183,7 @@ export default function AdminReportsPage() {
       byService.set(name, {
         name,
         count: prev.count + 1,
-        revenue: prev.revenue + (a.status === "done" ? Number(priceOf(a.service_id)) : 0),
+        revenue: prev.revenue + (a.status === "done" ? bookedPrice(a) : 0),
       });
     }
     const serviceRanking = [...byService.values()]
@@ -248,7 +273,16 @@ export default function AdminReportsPage() {
         </div>
       </div>
 
-      {stats === null ? (
+      {loadError ? (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-rose-200 bg-rose-50/60 px-6 py-12 text-center">
+          <p className="font-serif text-base text-rose-800">报表数据加载失败</p>
+          <p className="max-w-md text-xs leading-relaxed text-rose-700/80">
+            {loadError}
+            <br />
+            这表示读取失败而非本店没有经营数据，因此没有显示空报表。请稍后重试。
+          </p>
+        </div>
+      ) : stats === null ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-lg" />

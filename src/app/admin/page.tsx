@@ -1,6 +1,6 @@
 "use client";
 
-import { storeDayBounds } from "@/lib/format";
+import { storeDayBounds, storeMonthStart } from "@/lib/format";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -54,12 +54,8 @@ export default function AdminDashboardPage() {
   const load = useCallback(async () => {
     const supabase = createClient();
     const dayWindow = storeDayBounds(new Date());
-    
-    const monthStart = new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      1
-    );
+    // 本月区间锚定店铺东八区（不能用 new Date(y,m,1)，那是浏览器本地时区）
+    const monthStartIso = storeMonthStart(new Date());
 
     const [today, pending, done, members] = await Promise.all([
       q(() =>
@@ -84,9 +80,11 @@ export default function AdminDashboardPage() {
       q(() =>
         supabase
           .from("appointments")
-          .select("services(price)", { count: "exact" })
+          .select("services(price, member_price), price_snapshot, member_price_snapshot", {
+            count: "exact",
+          })
           .eq("status", "done")
-          .gte("start_time", monthStart.toISOString())
+          .gte("start_time", monthStartIso)
       ),
       q(() => supabase.from("members").select("id, balance", { count: "exact" })),
     ]);
@@ -100,9 +98,19 @@ export default function AdminDashboardPage() {
     setPendingCount(pendingRows.length);
     setMonthDone(done.count ?? 0);
     const doneRows =
-      (done.data as { services: { price: number } | null }[] | null) ?? [];
+      (done.data as {
+        services: { price: number; member_price: number | null } | null;
+        price_snapshot: number | null;
+        member_price_snapshot: number | null;
+      }[] | null) ?? [];
+    // 与报表同口径：优先下单时点快照，回退会员价→门市价（避免改价追溯改写历史营收）
     setMonthRevenue(
-      doneRows.reduce((sum, r) => sum + Number(r.services?.price ?? 0), 0)
+      doneRows.reduce((sum, r) => {
+        const snap = r.member_price_snapshot ?? r.price_snapshot;
+        const price =
+          snap ?? r.services?.member_price ?? r.services?.price ?? 0;
+        return sum + Number(price);
+      }, 0)
     );
     setMemberCount(members.count ?? 0);
     const balances = (members.data as Pick<Members, "balance">[] | null) ?? [];

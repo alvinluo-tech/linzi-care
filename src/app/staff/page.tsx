@@ -11,11 +11,13 @@ import { StatusBadge } from "@/components/status-badge";
 import { createClient } from "@/lib/supabase/client";
 import { q } from "@/lib/supabase/query";
 import {
-  formatMD,
   formatTime,
-  weekdayLabel,
+  monthDayFromKey,
   storeDateKey,
   storeDayBounds,
+  storeMD,
+  storeWeekdayLabel,
+  weekdayLabelFromKey,
 } from "@/lib/format";
 import { STORE_NAME } from "@/lib/constants";
 import type { Schedules, Staff } from "@/lib/types";
@@ -212,7 +214,7 @@ export default function StaffPage() {
                     >
                       <div className="flex items-center justify-between border-b border-border/60 pb-3">
                         <span className="font-serif text-xs font-medium text-bronze-700">
-                          {weekdayLabel(start)} · {formatMD(start)}
+                          {storeWeekdayLabel(start)} · {storeMD(start)}
                         </span>
                         <span className="rounded-sm bg-secondary px-2 py-0.5 text-[10px] text-bark-500">
                           全天排班
@@ -243,8 +245,7 @@ export default function StaffPage() {
                   <div className="flex items-center gap-2 border-b border-border/70 pb-3">
                     <span className="size-1.5 rotate-45 bg-bronze-600" />
                     <h2 className="font-serif text-base text-bark-800">
-                      {weekdayLabel(new Date(`${day}T12:00:00`))}{" "}
-                      {formatMD(new Date(`${day}T12:00:00`))}
+                      {weekdayLabelFromKey(day)} {monthDayFromKey(day)}
                     </h2>
                   </div>
                   <div className="mt-4 space-y-3.5">

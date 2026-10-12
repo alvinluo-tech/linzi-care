@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
-import { isIOS, isStandalone, urlBase64ToUint8Array } from "@/lib/pwa";
+import { isIOS, isStandalone, serviceWorkerReadyWithTimeout, urlBase64ToUint8Array } from "@/lib/pwa";
 
 interface PushNotificationButtonProps {
   userId?: string | null;
@@ -44,7 +44,7 @@ export function PushNotificationButton({
     setPermission(Notification.permission);
 
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await serviceWorkerReadyWithTimeout();
       const sub = await reg.pushManager.getSubscription();
       setSubscribed(!!sub);
     } catch {
@@ -91,15 +91,19 @@ export function PushNotificationButton({
         throw new Error("NEXT_PUBLIC_VAPID_PUBLIC_KEY 未配置");
       }
 
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await serviceWorkerReadyWithTimeout();
       let sub = await reg.pushManager.getSubscription();
 
+      // 记录本次是否由我们自己新建了原生订阅：只有自建的在入库失败时才该回滚，
+      // 否则会把用户此前已在其它入口建立的订阅误取消。
+      let createdHere = false;
       if (!sub) {
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: convertedVapidKey,
         });
+        createdHere = true;
       }
 
       // 3. 解析端点并存入 Supabase push_subscriptions 表
@@ -109,6 +113,7 @@ export function PushNotificationButton({
       const auth = subJson.keys?.auth;
 
       if (!endpoint || !p256dh || !auth) {
+        if (createdHere) await sub.unsubscribe().catch(() => {});
         throw new Error("获取浏览器推送密钥失败");
       }
 
@@ -141,6 +146,9 @@ export function PushNotificationButton({
 
       if (dbErr) {
         console.error("Save push subscription error:", dbErr);
+        // 回滚：否则浏览器里留下一条原生订阅、服务端却没有对应行，
+        // 下次 checkState 会误判为「已开启」，而推送永远发不出来。
+        if (createdHere) await sub.unsubscribe().catch(() => {});
         throw new Error(dbErr.message);
       }
 

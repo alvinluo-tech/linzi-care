@@ -17,6 +17,10 @@ export const bookingSpec = suite("顾客预约旅程", [
       );
       expect(!!memberRow, "读取会员档案失败");
       ctx.memberId = memberRow.id;
+      // 记账基线：必须在任何预约产生之前记录。
+      // 「预约即扣款」生效后，创建预约会先扣款、取消/删除再退回；
+      // 若baseline取自扣款之后，清理阶段的退款会让余额高于基线而误报。
+      ctx.originalBalance = Number(memberRow.balance);
 
       const svc = await retry(() =>
         q(member.from("services").select("id, name, duration").eq("name", "姜汤头疗").single())

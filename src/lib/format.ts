@@ -77,6 +77,17 @@ export function startOfWeekMonday(d: Date): Date {
   return addDays(x, -((x.getDay() + 6) % 7));
 }
 
+/** 店铺时区「今天」所在周的周一（日期字面量 Date，供排班周视图做锚点） */
+export function storeWeekStartMonday(value: string | number | Date = new Date()): Date {
+  // 以店铺日期键为基准构造 UTC 正午，再回退到周一，避免浏览器时区影响周界
+  const key = storeDateKey(value);
+  const noonUtc = new Date(`${key}T12:00:00Z`);
+  const dow = (noonUtc.getUTCDay() + 6) % 7; // 周一=0
+  const monday = new Date(noonUtc);
+  monday.setUTCDate(monday.getUTCDate() - dow);
+  return new Date(`${monday.toISOString().slice(0, 10)}T00:00:00Z`);
+}
+
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 export function weekdayLabel(d: Date): string {
@@ -85,6 +96,17 @@ export function weekdayLabel(d: Date): string {
 
 export function formatMD(d: Date): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+/** 从店铺日期字面量 `YYYY-MM-DD` 直接得到「M月D日」与星期，避免再用本地 Date 解析 */
+export function monthDayFromKey(dateKeyStr: string): string {
+  const [, m, d] = dateKeyStr.split("-");
+  return `${Number(m)}月${Number(d)}日`;
+}
+
+export function weekdayLabelFromKey(dateKeyStr: string): string {
+  // 用 UTC 正午解析纯日期键，无论浏览器时区都不会漂到前后一天
+  return weekdayLabel(new Date(`${dateKeyStr}T12:00:00Z`));
 }
 
 export function formatTime(iso?: string | null): string {
@@ -116,6 +138,29 @@ export function storeDayBoundsFromLiteral(d: Date): { startIso: string; endIso: 
 /** 店铺时区的「星期几」标签（输入是时刻，不是日期字面量） */
 export function storeWeekdayLabel(value: string | number | Date): string {
   return weekdayLabel(new Date(`${storeDateKey(value)}T12:00:00Z`));
+}
+
+/** 店铺时区的「M月D日」（输入是时刻，锚定店铺时区） */
+export function storeMD(value: string | number | Date): string {
+  const [, m, d] = storeDateKey(value).split("-");
+  return `${Number(m)}月${Number(d)}日`;
+}
+
+/**
+ * 店铺时区下「某个时刻所属月」的第一天 00:00 的 UTC 瞬间。
+ * 用于「本月」类统计的区间下界：不能用 new Date(y, m, 1)（那是浏览器本地时区），
+ * 否则非东八区设备会把月初/月末几个小时的单算进错误的月份。
+ */
+export function storeMonthStart(value: string | number | Date = new Date()): string {
+  const ym = storeDateKey(value).slice(0, 7); // YYYY-MM
+  return combineStoreDateTime(`${ym}-01`, "00:00");
+}
+
+/** 店铺时区下传入时刻所在「次日」00:00 的 UTC 瞬间（半开区间上界） */
+export function storeNextDayStart(value: string | number | Date): string {
+  const next = new Date(`${storeDateKey(value)}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return combineStoreDateTime(next.toISOString().slice(0, 10), "00:00");
 }
 
 export function formatCNY(v: string | number | null | undefined): string {

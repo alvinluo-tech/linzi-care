@@ -35,9 +35,18 @@ export const staffSpec = suite("技师打点与状态机硬约束", [
       );
       expect(!error, `技师打点「完成服务」失败: ${error?.message}`);
       const row = await retry(() =>
-        q(ctx.boss.from("appointments").select("status").eq("id", ctx.apptId).single())
+        q(
+          ctx.boss
+            .from("appointments")
+            .select("status, charged_amount, payment_state")
+            .eq("id", ctx.apptId)
+            .single()
+        )
       );
       expect(row.status === "done", `状态应为 done，实际 ${row.status}`);
+      // 记录本次「真正履约完成」的金额：清理阶段校验余额时，
+      // 完成的单是消费掉的（不退），需从基线中扣除。
+      ctx.e2eCompletedValue = Number(row.charged_amount ?? 0);
     },
   },
   {

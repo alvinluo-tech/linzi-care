@@ -101,13 +101,19 @@ export default function AdminMembersPage() {
   const submitBalance = async () => {
     if (!balanceTarget) return;
     const amount = Number(balanceAmount);
-    if (Number.isNaN(amount)) {
+    // Number("Infinity")/Number("1e309") 都不是 NaN，能骗过 isNaN 检查并让预览渲染成 ¥Infinity。
+    // 用 isFinite 收口，并加上合理上界（余额是钱，不允许六位以上乱填）。
+    if (!Number.isFinite(amount) || amount === 0) {
       toast.error("请输入有效的金额");
+      return;
+    }
+    if (Math.abs(amount) > 1_000_000) {
+      toast.error("单次调整金额不能超过 ¥1,000,000");
       return;
     }
     const final =
       balanceMode === "set" ? amount : Number(balanceTarget.balance) + amount;
-    if (final < 0) {
+    if (!Number.isFinite(final) || final < 0) {
       toast.error("调整后余额不能为负数");
       return;
     }

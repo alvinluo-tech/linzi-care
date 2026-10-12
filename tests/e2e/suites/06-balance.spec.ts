@@ -23,7 +23,9 @@ export const balanceSpec = suite("会员余额安全与审计", [
       const row = await retry(() =>
         q(ctx.member.from("members").select("balance").eq("id", ctx.memberId).single())
       );
-      ctx.originalBalance = Number(row.balance);
+      // 注意：不要在这里覆盖 ctx.originalBalance。
+      // 「预约即扣款」生效后，此时余额已被前面的预约扣减，用它当基线会让
+      // 清理阶段的退款显得「多退」。基线已在 booking 套件、任何预约产生之前记录。
       expect(Number(row.balance) !== 999999, "余额竟被篡改");
     },
   },
@@ -97,17 +99,20 @@ export const balanceSpec = suite("会员余额安全与审计", [
     name: "GIVEN 测试完成 WHEN 恢复原始余额 THEN 审计再记一笔且余额复原",
     run: async () => {
       const boss = ctx.boss;
+      // 复原到「本次 +100 之前」的值（ctx.balanceBefore），而不是更早的记账基线：
+      // 「预约即扣款」生效后，此前的预约已经合法扣走了钱，强行回到更早的基线
+      // 会凭空补钱，并让清理阶段的退款变成一笔多退。
       await retry(() =>
         boss.rpc("admin_update_balance", {
           p_member_id: ctx.memberId,
-          p_new_balance: ctx.originalBalance,
+          p_new_balance: ctx.balanceBefore,
           p_reason: "E2E-TEST 余额复原",
         })
       );
       const row = await retry(() =>
         q(boss.from("members").select("balance").eq("id", ctx.memberId).single())
       );
-      expect(Number(row.balance) === ctx.originalBalance, "余额未复原");
+      expect(Number(row.balance) === ctx.balanceBefore, "余额未复原");
     },
   },
 ]);

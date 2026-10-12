@@ -17,7 +17,7 @@ import { NewAppointmentDialog } from "@/components/admin/new-appointment-dialog"
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { q } from "@/lib/supabase/query";
-import { addDays, startOfLocalDay } from "@/lib/format";
+import { addDays, storeDayBounds } from "@/lib/format";
 import type { AppointmentWithRefs, Staff } from "@/lib/types";
 
 // 动态客户端加载 Schedule-X，避免任何 SSR DOM/时钟预渲染不一致
@@ -50,10 +50,11 @@ export default function AdminCalendarPage() {
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    // 默认加载前后 45 天范围的预约，供日历周视图、日视图和月网格自由切换浏览
-    const today = startOfLocalDay(new Date());
-    const rangeStart = addDays(today, -30);
-    const rangeEnd = addDays(today, 60);
+    // 默认加载前后 45 天范围的预约，供日历周视图、日视图和月网格自由切换浏览。
+    // 边界锚定店铺东八区：用 startOfLocalDay（浏览器本地）在非 +08:00 设备上
+    // 会把边缘当天的预约排除在日历之外。
+    const rangeStartIso = storeDayBounds(addDays(new Date(), -30)).startIso;
+    const rangeEndIso = storeDayBounds(addDays(new Date(), 60)).startIso;
 
     const [aptRes, staffRes] = await Promise.all([
       q(() =>
@@ -62,8 +63,8 @@ export default function AdminCalendarPage() {
           .select(
             "*, members(id, name, phone), staff(id, name, title), services(id, name, duration, price)"
           )
-          .gte("start_time", rangeStart.toISOString())
-          .lt("start_time", rangeEnd.toISOString())
+          .gte("start_time", rangeStartIso)
+          .lt("start_time", rangeEndIso)
           .order("start_time")
       ),
       q(() =>

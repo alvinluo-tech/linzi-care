@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarX2, Sparkles, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -49,7 +49,23 @@ export default function MyPage() {
   const [cancelTarget, setCancelTarget] = useState<AppointmentRow | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
+  // 乱序/卸载守卫：每轮加载领一个递增序号，旧响应回来时序号已过期则丢弃。
+  // 取消预约后会再次 loadAll（见 cancel），若不做序号比较，先发后至的旧响应
+  // 会把「已取消」的列表覆盖回取消前的数据。
+  const loadSeqRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const loadAll = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    // 本轮是否仍是最新且组件仍挂载：任何 setState 前都要过这一关
+    const stale = () => !mountedRef.current || seq !== loadSeqRef.current;
+
     setNow(Date.now());
     const supabase = createClient();
     // 容错：supabase-js 异步初始化/网络抖动时 getUser 可能瞬时返回 null，
@@ -63,6 +79,7 @@ export default function MyPage() {
       }
       await new Promise((r) => setTimeout(r, 800 * (i + 1)));
     }
+    if (stale()) return;
     if (!user) {
       router.replace("/login?next=/my");
       return;
@@ -71,6 +88,7 @@ export default function MyPage() {
     const { data: memberRow } = await q(() =>
       supabase.from("members").select("*").eq("user_id", user.id).maybeSingle()
     );
+    if (stale()) return;
 
     const m = (memberRow as Members) ?? null;
     setMember(m);
@@ -84,7 +102,10 @@ export default function MyPage() {
           .eq("member_id", m.id)
           .order("created_at", { ascending: false })
           .limit(30)
-      ).then(({ data }) => setBalanceLogs((data as BalanceLogs[]) ?? []));
+      ).then(({ data }) => {
+        if (stale()) return;
+        setBalanceLogs((data as BalanceLogs[]) ?? []);
+      });
     }
 
     q(() =>
@@ -94,6 +115,7 @@ export default function MyPage() {
         .order("start_time", { ascending: false })
         .limit(50)
     ).then(({ data }) => {
+      if (stale()) return;
       setAppointments((data as AppointmentRow[]) ?? []);
       setLoading(false);
     });
@@ -123,17 +145,30 @@ export default function MyPage() {
     if (!member) return;
     setSavingProfile(true);
     const supabase = createClient();
+    const trimmedName = name.trim() || member.name;
+    const trimmedPhone = phone.trim() || null;
     const { error } = await supabase
       .from("members")
-      .update({ name: name.trim() || member.name, phone: phone.trim() || null })
+      .update({ name: trimmedName, phone: trimmedPhone })
       .eq("id", member.id);
-    await supabase
-      .from("profiles")
-      .update({ display_name: name.trim() || member.name, phone: phone.trim() || null })
-      .eq("id", member.user_id ?? "");
+
+    // profiles 与 members 双写：两者都要成功才算保存成功。
+    // 原先此处丢弃了 profiles 的错误并照样提示「资料已更新」——显示名没更新却告诉用户成功了。
+    // user_id 为空时不做这次写入（否则 .eq("id","") 会静默命中 0 行）。
+    let profileError: { message: string } | null = null;
+    if (member.user_id) {
+      const res = await supabase
+        .from("profiles")
+        .update({ display_name: trimmedName, phone: trimmedPhone })
+        .eq("id", member.user_id);
+      profileError = res.error;
+    }
     setSavingProfile(false);
-    if (error) {
-      toast.error("保存失败", { description: error.message });
+
+    if (error || profileError) {
+      toast.error("保存失败", {
+        description: error?.message ?? profileError?.message,
+      });
       return;
     }
     toast.success("资料已更新");

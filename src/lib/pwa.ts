@@ -34,3 +34,33 @@ export function isStandalone(): boolean {
       true
   );
 }
+
+/**
+ * 等待 Service Worker 就绪，带超时。
+ * `navigator.serviceWorker.ready` 在没有注册成功时既不 resolve 也不 reject，
+ * 直接 await 会让「开启推送」永久转圈（finally 永远到不了）。
+ * 超时抛错，交由调用方提示并复位 loading。
+ */
+export function serviceWorkerReadyWithTimeout(
+  timeoutMs = 8000
+): Promise<ServiceWorkerRegistration> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+    return Promise.reject(new Error("当前环境不支持 Service Worker"));
+  }
+  return new Promise<ServiceWorkerRegistration>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("通知服务未就绪，请刷新页面后重试")),
+      timeoutMs
+    );
+    navigator.serviceWorker.ready.then(
+      (reg) => {
+        clearTimeout(timer);
+        resolve(reg);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}

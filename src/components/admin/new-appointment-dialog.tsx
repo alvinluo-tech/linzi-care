@@ -322,6 +322,7 @@ export function NewAppointmentDialog({
                 rows={2}
                 value={remark}
                 onChange={(e) => setRemark(e.target.value)}
+                maxLength={200}
               />
             </div>
           </div>

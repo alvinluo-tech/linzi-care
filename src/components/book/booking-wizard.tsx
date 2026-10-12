@@ -708,6 +708,7 @@ export function BookingWizard() {
                     placeholder="如：近来肩颈容易僵硬，偏好力度沉稳些；或对某类香气有偏好等。"
                     className="mt-2"
                     rows={3}
+                    maxLength={200}
                   />
                 </div>
 

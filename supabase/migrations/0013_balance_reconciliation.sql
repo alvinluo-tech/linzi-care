@@ -65,12 +65,18 @@ begin
   ledger as (
     select
       bl.member_id,
-      coalesce(sum(case when bl.delta > 0 then bl.delta end), 0) as topped_up,
-      coalesce(sum(case when bl.delta < 0
-                         and bl.reason not like '预约扣费%'
-                        then -bl.delta end), 0) as manual_decrease,
-      coalesce(sum(case when bl.reason like '预约扣费%'
-                        then -bl.delta end), 0) as booked_charged
+      -- 真实充值 = 正 delta 且不是预约退款（0012 起退款带 entry_kind='booking_refund'）。
+      -- 原写法只按 delta>0 统计，会把「取消预约退回」也算成充值，虚增累计充值额。
+      coalesce(sum(case
+        when bl.delta > 0 and coalesce(bl.entry_kind, 'manual') <> 'booking_refund'
+        then bl.delta end), 0) as topped_up,
+      -- 手动核减 = 负 delta 且不是预约扣费（结构化判定，不再靠 reason 前缀）
+      coalesce(sum(case
+        when bl.delta < 0 and coalesce(bl.entry_kind, 'manual') <> 'booking_charge'
+        then -bl.delta end), 0) as manual_decrease,
+      coalesce(sum(case
+        when bl.entry_kind = 'booking_charge'
+        then -bl.delta end), 0) as booked_charged
     from public.balance_logs bl
     group by bl.member_id
   )
