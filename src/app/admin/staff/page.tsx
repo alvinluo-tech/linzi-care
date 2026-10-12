@@ -23,7 +23,7 @@ import { AccountActions } from "@/components/admin/account-actions";
 import { CredentialsDialog } from "@/components/credentials-dialog";
 import { invokeFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
-import { q } from "@/lib/supabase/query";
+import { mutate, q } from "@/lib/supabase/query";
 import { cn } from "@/lib/utils";
 import type { Profiles, Staff } from "@/lib/types";
 
@@ -92,7 +92,7 @@ export default function AdminStaffPage() {
   const saveEdit = async () => {
     if (!editing) return;
     setSubmitting(true);
-    const { error } = await q(() =>
+    const { error } = await mutate(() =>
       createClient()
         .from("staff")
         .update({
@@ -115,7 +115,7 @@ export default function AdminStaffPage() {
   };
 
   const toggleBusiness = async (row: StaffRow, active: boolean) => {
-    const { error } = await q(() =>
+    const { error } = await mutate(() =>
       createClient()
         .from("staff")
         .update({ is_active: active })

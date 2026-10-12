@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, History, Plus, UserPlus, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -22,7 +22,7 @@ import { AccountActions } from "@/components/admin/account-actions";
 import { CredentialsDialog } from "@/components/credentials-dialog";
 import { invokeFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
-import { q } from "@/lib/supabase/query";
+import { mutate, q } from "@/lib/supabase/query";
 import { formatCNY, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BalanceLogs, Members } from "@/lib/types";
@@ -50,6 +50,7 @@ export default function AdminMembersPage() {
   // 余额记录
   const [logsTarget, setLogsTarget] = useState<Members | null>(null);
   const [logs, setLogs] = useState<BalanceLogs[] | null>(null);
+  const logsReqRef = useRef(0);
 
   // 创建表单
   const [form, setForm] = useState({
@@ -109,7 +110,7 @@ export default function AdminMembersPage() {
       return;
     }
     setSubmitting(true);
-    const { error } = await q(() =>
+    const { error } = await mutate(() =>
       createClient().rpc("admin_update_balance", {
         p_member_id: balanceTarget.id,
         p_new_balance: final,
@@ -128,9 +129,10 @@ export default function AdminMembersPage() {
   };
 
   const openLogs = async (member: Members) => {
+    const req = ++logsReqRef.current;
     setLogsTarget(member);
     setLogs(null);
-    const { data } = await q(() =>
+    const { data, error } = await q(() =>
       createClient()
         .from("balance_logs")
         .select("*")
@@ -138,13 +140,20 @@ export default function AdminMembersPage() {
         .order("created_at", { ascending: false })
         .limit(30)
     );
+    // 乱序守卫：连点两行时，先点击那一条的响应不得覆盖后打开的弹窗
+    if (req !== logsReqRef.current) return;
+    if (error) {
+      toast.error("余额流水加载失败", { description: error.message });
+      setLogs([]);
+      return;
+    }
     setLogs((data as BalanceLogs[]) ?? []);
   };
 
   const saveEdit = async () => {
     if (!editing) return;
     setSubmitting(true);
-    const { error } = await q(() =>
+    const { error } = await mutate(() =>
       createClient()
         .from("members")
         .update({
@@ -289,7 +298,7 @@ export default function AdminMembersPage() {
                 active={m.is_active}
                 name={m.name}
                 onToggleBusiness={async (active) => {
-                  const { error } = await q(() =>
+                  const { error } = await mutate(() =>
                     createClient()
                       .from("members")
                       .update({ is_active: active })

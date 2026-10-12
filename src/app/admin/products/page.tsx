@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable } from "@/components/ui/data-table";
 import { createClient } from "@/lib/supabase/client";
-import { q } from "@/lib/supabase/query";
+import { mutate, q } from "@/lib/supabase/query";
 import { formatCNY, STOCK_STATUS_META } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ProductCategories, ProductWithCategory } from "@/lib/types";
@@ -117,8 +117,8 @@ export default function AdminProductsPage() {
     };
     const supabase = createClient();
     const { error } = editing
-      ? await q(() => supabase.from("products").update(payload).eq("id", editing.id))
-      : await q(() => supabase.from("products").insert(payload));
+      ? await mutate(() => supabase.from("products").update(payload).eq("id", editing.id))
+      : await mutate(() => supabase.from("products").insert(payload));
     setSubmitting(false);
     if (error) {
       toast.error("保存失败", { description: error.message });
@@ -131,7 +131,7 @@ export default function AdminProductsPage() {
   };
 
   const remove = async (product: ProductWithCategory) => {
-    const { error } = await q(() =>
+    const { error } = await mutate(() =>
       createClient().from("products").delete().eq("id", product.id)
     );
     if (error) {
@@ -144,7 +144,7 @@ export default function AdminProductsPage() {
 
   const addCategory = async () => {
     if (!newCategory.trim()) return;
-    const { error } = await q(() =>
+    const { error } = await mutate(() =>
       createClient()
         .from("product_categories")
         .insert({ name: newCategory.trim(), sort_order: categories.length + 1 })
@@ -159,7 +159,7 @@ export default function AdminProductsPage() {
   };
 
   const removeCategory = async (category: ProductCategories) => {
-    const { error } = await q(() =>
+    const { error } = await mutate(() =>
       createClient().from("product_categories").delete().eq("id", category.id)
     );
     if (error) {

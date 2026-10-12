@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable } from "@/components/ui/data-table";
 import { createClient } from "@/lib/supabase/client";
-import { q } from "@/lib/supabase/query";
+import { mutate, q } from "@/lib/supabase/query";
 import { formatCNY, formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Services, Staff, StaffServices } from "@/lib/types";
@@ -124,8 +124,8 @@ export default function AdminServicesPage() {
     };
     const supabase = createClient();
     const { error } = editing
-      ? await q(() => supabase.from("services").update(payload).eq("id", editing.id))
-      : await q(() => supabase.from("services").insert(payload));
+      ? await mutate(() => supabase.from("services").update(payload).eq("id", editing.id))
+      : await mutate(() => supabase.from("services").insert(payload));
     setSubmitting(false);
     if (error) {
       toast.error("保存失败", { description: error.message });
@@ -156,7 +156,7 @@ export default function AdminServicesPage() {
     });
     const supabase = createClient();
     if (checked) {
-      const { error } = await q(() =>
+      const { error } = await mutate(() =>
         supabase
           .from("staff_services")
           .insert({ staff_id: staffId, service_id: configTarget.id })
@@ -166,7 +166,7 @@ export default function AdminServicesPage() {
         return;
       }
     } else {
-      const { error } = await q(() =>
+      const { error } = await mutate(() =>
         supabase
           .from("staff_services")
           .delete()
@@ -182,7 +182,7 @@ export default function AdminServicesPage() {
   };
 
   const remove = async (service: Services) => {
-    const { error } = await q(() =>
+    const { error } = await mutate(() =>
       createClient().from("services").delete().eq("id", service.id)
     );
     if (error) {
@@ -193,8 +193,9 @@ export default function AdminServicesPage() {
     void load();
   };
 
-  const columns = useMemo<ColumnDef<Services>[]>(
-    () => [
+  // 不做 memo：列定义里捕获的 openConfig 依赖 links 状态，
+  // 一旦被 useMemo([]) 冻结就会永远读到首帧的空数组。
+  const columns: ColumnDef<Services>[] = [
       {
         accessorKey: "name",
         header: ({ column }) => (
@@ -338,9 +339,7 @@ export default function AdminServicesPage() {
           );
         },
       },
-    ],
-    []
-  );
+  ];
 
   return (
     <div className="space-y-6">
