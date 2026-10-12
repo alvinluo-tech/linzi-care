@@ -29,11 +29,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck
-        run: npx tsc --noEmit
-
       - name: Build
         run: npm run build
+
+      # 必须排在 Build 之后：LayoutProps / PageProps 这类 Next 16 生成类型来自
+      # .next/types/**（tsconfig include），而 next-env.d.ts 本身被 gitignore，
+      # 干净检出时它们还不存在，先跑 tsc 只会报 Cannot find name 'LayoutProps'。
+      - name: Typecheck
+        run: npx tsc --noEmit
 
       # 说明：这里刻意不跑 tests/。该目录下的 e2e 与 browser 套件直连生产
       # Supabase 项目，会真实修改会员余额并给真实顾客发通知；要进 CI 必须先
