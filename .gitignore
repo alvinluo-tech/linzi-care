@@ -14,6 +14,8 @@
 /coverage
 /test-results/
 /playwright-report/
+# 本地浏览器测试夹具内含生产凭据，禁止入库（口令改由 .env.local 提供）
+/tests/browser/
 
 # next.js
 /.next/
@@ -34,6 +36,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 例外：.env.example 只含占位符，是必须入库的装配清单
+!.env.example
 
 # vercel
 .vercel
@@ -41,3 +45,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 本地运行日志与一次性诊断产物
+prod-server.log

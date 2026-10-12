@@ -11,6 +11,10 @@ const eslintConfig = defineConfig([
       // effect 内调用 async load()，setState 都发生在 Promise 回调中，
       // 该规则的静态分析会误报，降级为警告。
       "react-hooks/set-state-in-effect": "warn",
+      // 显式开启依赖检查：本次审计发现的多个陈旧闭包缺陷（例如
+      // src/app/admin/services/page.tsx 的列定义 useMemo([]) 冻结了
+      // 首帧空 links）之所以能存活，就是因为该规则在本仓库一条都没报过。
+      "react-hooks/exhaustive-deps": "warn",
     },
   },
   // Override default ignores of eslint-config-next.

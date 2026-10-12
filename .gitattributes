@@ -1,0 +1,14 @@
+# 统一行尾：仓库内一律 LF。缺这个文件配合 core.autocrlf=true 会让 git status
+# 出现幻影改动（本次审计中就观察到文件在 M 与干净之间来回跳），
+# 并导致个别文件带上 BOM/CRLF（见 src/app/staff/page.tsx:1）。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg text eol=lf
+*.woff binary
+*.woff2 binary

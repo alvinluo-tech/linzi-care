@@ -29,5 +29,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck
+        run: npx tsc --noEmit
+
       - name: Build
         run: npm run build
+
+      # 说明：这里刻意不跑 tests/。该目录下的 e2e 与 browser 套件直连生产
+      # Supabase 项目，会真实修改会员余额并给真实顾客发通知；要进 CI 必须先
+      # 建 staging 项目并把 URL/口令从夹具改为环境变量。
