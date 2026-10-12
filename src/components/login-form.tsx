@@ -64,7 +64,7 @@ export function LoginForm() {
   };
 
   /** 点历史账号：回填邮箱并把焦点交给密码框（密码永不回填） */
-  const useAccount = (acct: RememberedAccount) => {
+  const fillAccount = (acct: RememberedAccount) => {
     setEmail(acct.email);
     passwordRef.current?.focus();
   };
@@ -157,7 +157,7 @@ export function LoginForm() {
                   >
                     <button
                       type="button"
-                      onClick={() => useAccount(acct)}
+                      onClick={() => fillAccount(acct)}
                       className="max-w-[13rem] truncate"
                       title={acct.email}
                     >

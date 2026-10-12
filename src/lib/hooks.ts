@@ -132,6 +132,28 @@ export function usePendingCount(): number | null {
   return count;
 }
 
+/** 通知中心聚合查询返回的行形状（只取用到的字段，避免 select * ） */
+interface InboxPendingRow {
+  id: string;
+  created_at: string | null;
+  start_time: string;
+  members: { name: string | null } | null;
+  services: { name: string | null } | null;
+}
+interface InboxFailedRow {
+  id: string;
+  created_at: string;
+  type: string;
+  appointment_id: string | null;
+}
+interface InboxTodayRow {
+  id: string;
+  start_time: string;
+  status: string;
+  members: { name: string | null } | null;
+  services: { name: string | null } | null;
+}
+
 /** 通知中心里的一条待办事项 */
 export interface InboxItem {
   id: string;
@@ -222,7 +244,7 @@ export function useInbox(): InboxState {
 
     const list: InboxItem[] = [];
 
-    for (const a of (pending.data ?? []) as any[]) {
+    for (const a of (pending.data ?? []) as InboxPendingRow[]) {
       list.push({
         id: `p-${a.id}`,
         kind: "pending",
@@ -235,7 +257,7 @@ export function useInbox(): InboxState {
       });
     }
 
-    for (const n of (failed.data ?? []) as any[]) {
+    for (const n of (failed.data ?? []) as InboxFailedRow[]) {
       list.push({
         id: `f-${n.id}`,
         kind: "delivery_failed",
@@ -246,7 +268,7 @@ export function useInbox(): InboxState {
       });
     }
 
-    for (const a of (todayArrive.data ?? []) as any[]) {
+    for (const a of (todayArrive.data ?? []) as InboxTodayRow[]) {
       list.push({
         id: `t-${a.id}`,
         kind: "arrive_today",
