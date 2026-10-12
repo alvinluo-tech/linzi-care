@@ -279,6 +279,34 @@ export interface Database {
         Args: { p_pass_id: string; p_reason?: string };
         Returns: undefined;
       };
+      admin_balance_reconciliation: {
+        Args: Record<string, never>;
+        Returns: {
+          member_id: string;
+          member_name: string;
+          member_active: boolean;
+          current_balance: number;
+          topped_up: number;
+          manual_decrease: number;
+          booked_charged: number;
+          unbilled_done_count: number;
+          unbilled_done_value: number;
+          suggested_balance: number;
+          adjust_by: number;
+        }[];
+      };
+      admin_balance_reconciliation_totals: {
+        Args: Record<string, never>;
+        Returns: {
+          members_count: number;
+          members_overstated: number;
+          balance_sum: number;
+          topped_up_sum: number;
+          unbilled_done_value_sum: number;
+          suggested_balance_sum: number;
+          adjust_sum: number;
+        }[];
+      };
       update_appointment_status: {
         Args: { p_appointment_id: string; p_status: string };
         Returns: undefined;
