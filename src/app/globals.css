@@ -237,6 +237,11 @@
   --sx-color-surface-container-high: #f0e9dc;
   --sx-color-outline: #e7dcd2;
   --sx-color-outline-variant: #ede4d6;
+  /* 层级整体压到 shadcn Dialog（z-50）之下：吸顶表头仍高于日历内容（z-index 1-3），
+     但打开新建预约等弹窗时不会被日历表头盖住 */
+  --sx-z-index-week-header: 40;
+  --sx-z-index-event-modal: 45;
+  --sx-calendar-header-popup-z-index: 46;
   font-family: var(--font-sans);
 }
 
