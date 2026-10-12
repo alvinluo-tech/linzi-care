@@ -2,30 +2,43 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, CalendarDays, Loader2, LogOut, UserRound } from "lucide-react";
+import { CalendarClock, CalendarDays, Loader2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BrandMark, PageLoader, SealMark } from "@/components/brand";
 import { StatusBadge } from "@/components/status-badge";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import {
-  addDays,
-  dateKey,
   formatMD,
   formatTime,
-  startOfLocalDay,
   weekdayLabel,
+  storeDateKey,
+  storeDayBounds,
 } from "@/lib/format";
 import { STORE_NAME } from "@/lib/constants";
-import type { AppointmentWithRefs, Schedules, Staff } from "@/lib/types";
+import type { Schedules, Staff } from "@/lib/types";
+
+/** my_guest_appointments RPC 返回的客单视图（姓名/电话经安全定义函数授权可见） */
+interface GuestAppointment {
+  appointment_id: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  remark: string | null;
+  service_name: string;
+  service_duration: number;
+  member_name: string | null;
+  member_phone: string | null;
+}
 
 export default function StaffPage() {
   const router = useRouter();
   const [me, setMe] = useState<Staff | null>(null);
   const [loading, setLoading] = useState(true);
   const [schedules, setSchedules] = useState<Schedules[]>([]);
-  const [appointments, setAppointments] = useState<AppointmentWithRefs[]>([]);
+  const [appointments, setAppointments] = useState<GuestAppointment[]>([]);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -50,30 +63,33 @@ export default function StaffPage() {
       return;
     }
 
-    const todayStart = startOfLocalDay(new Date());
+    const dayWindow = storeDayBounds(new Date());
 
     const [scheduleRes, appointmentRes] = await Promise.all([
-      supabase
-        .from("schedules")
-        .select("*")
-        .eq("staff_id", staff.id)
-        .gte("start_time", todayStart.toISOString())
-        .order("start_time")
-        .limit(60),
-      supabase
-        .from("appointments")
-        .select(
-          "*, members(id, name, phone), staff(id, name, title), services(id, name, duration, price)"
-        )
-        .eq("staff_id", staff.id)
-        .gte("start_time", addDays(todayStart, -1).toISOString())
-        .order("start_time")
-        .limit(100),
+      q(() =>
+        supabase
+          .from("schedules")
+          .select("*")
+          .eq("staff_id", staff.id)
+          .gte("start_time", dayWindow.startIso)
+          .order("start_time")
+          .limit(60)
+      ),
+      // 安全定义函数：按「分配给自己的预约」返回顾客姓名/电话（不暴露余额等敏感列）
+      q(() => supabase.rpc("my_guest_appointments")),
     ]);
 
     setSchedules((scheduleRes.data as Schedules[]) ?? []);
+    const guestRows =
+      (appointmentRes.data as GuestAppointment[] | null) ?? [];
     setAppointments(
-      (appointmentRes.data as unknown as AppointmentWithRefs[]) ?? []
+      // 只保留「昨天及之后」的客单：按时刻比较，不做字符串比较
+      // （PostgREST 返回的是 `+00:00` 形式，与 `Z` 后缀不可直接字典序比较）
+      guestRows.filter(
+        (a) =>
+          new Date(a.start_time).getTime() >=
+          new Date(dayWindow.startIso).getTime() - 24 * 60 * 60 * 1000
+      )
     );
     setLoading(false);
   }, [router]);
@@ -83,9 +99,9 @@ export default function StaffPage() {
   }, [load]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, AppointmentWithRefs[]>();
+    const map = new Map<string, GuestAppointment[]>();
     for (const a of appointments) {
-      const key = dateKey(new Date(a.start_time));
+      const key = storeDateKey(a.start_time);
       map.set(key, [...(map.get(key) ?? []), a]);
     }
     return [...map.entries()];
@@ -237,7 +253,7 @@ export default function StaffPage() {
                         a.status === "confirmed" || a.status === "arrived";
                       return (
                       <div
-                        key={a.id}
+                        key={a.appointment_id}
                         className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/80 bg-card p-5 shadow-xs transition-all duration-300 hover:border-bronze-300 hover:shadow-md"
                       >
                         <div>
@@ -248,11 +264,11 @@ export default function StaffPage() {
                             <StatusBadge status={a.status} />
                           </div>
                           <p className="mt-2 text-sm text-bark-700">
-                            调理项目：<strong>{a.services?.name ?? "—"}</strong>
+                            调理项目：<strong>{a.service_name}</strong>
                           </p>
                           <p className="mt-1 text-xs text-bark-500">
-                            预约贵宾：{a.members?.name ?? "—"}
-                            {a.members?.phone ? `（${a.members.phone}）` : ""}
+                            预约贵宾：{a.member_name ?? "—"}
+                            {a.member_phone ? `（${a.member_phone}）` : ""}
                           </p>
                           {a.remark && (
                             <p className="mt-2 rounded-md bg-paper/80 px-2.5 py-1.5 text-xs text-bark-600">
@@ -269,9 +285,9 @@ export default function StaffPage() {
                                 size="sm"
                                 variant="outline"
                                 disabled={marking !== null}
-                                onClick={() => void mark(a.id, "arrived")}
+                                onClick={() => void mark(a.appointment_id, "arrived")}
                               >
-                                {marking === `${a.id}:arrived` ? (
+                                {marking === `${a.appointment_id}:arrived` ? (
                                   <Loader2 className="size-3.5 animate-spin" />
                                 ) : null}
                                 顾客到店
@@ -280,10 +296,10 @@ export default function StaffPage() {
                             <Button
                               size="sm"
                               disabled={marking !== null}
-                              onClick={() => void mark(a.id, "done")}
+                              onClick={() => void mark(a.appointment_id, "done")}
                               className="bg-bronze-500 text-white hover:bg-bronze-600"
                             >
-                              {marking === `${a.id}:done` ? (
+                              {marking === `${a.appointment_id}:done` ? (
                                 <Loader2 className="size-3.5 animate-spin" />
                               ) : null}
                               完成服务
@@ -293,10 +309,10 @@ export default function StaffPage() {
                                 size="sm"
                                 variant="outline"
                                 disabled={marking !== null}
-                                onClick={() => void mark(a.id, "no_show")}
+                                onClick={() => void mark(a.appointment_id, "no_show")}
                                 className="border-rose-200 text-rose-700 hover:bg-rose-50"
                               >
-                                {marking === `${a.id}:no_show` ? (
+                                {marking === `${a.appointment_id}:no_show` ? (
                                   <Loader2 className="size-3.5 animate-spin" />
                                 ) : null}
                                 未到店

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarX2, History, Sparkles, UserRound, Wallet } from "lucide-react";
+import { CalendarX2, Sparkles, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ import { PageLoader, SealMark } from "@/components/brand";
 import { StatusBadge } from "@/components/status-badge";
 import { MemberPassportCard } from "@/components/member-passport-card";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import {
   formatCNY,
   formatDateTime,
@@ -51,43 +52,51 @@ export default function MyPage() {
   const loadAll = useCallback(async () => {
     setNow(Date.now());
     const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // 容错：supabase-js 异步初始化/网络抖动时 getUser 可能瞬时返回 null，
+    // 短暂重试而不是立刻把用户踢到登录页（对弱网真实用户同样友好）
+    let user = null;
+    for (let i = 0; i < 3; i++) {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        user = data.user;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+    }
     if (!user) {
       router.replace("/login?next=/my");
       return;
     }
 
-    const { data: memberRow } = await supabase
-      .from("members")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const { data: memberRow } = await q(() =>
+      supabase.from("members").select("*").eq("user_id", user.id).maybeSingle()
+    );
 
     const m = (memberRow as Members) ?? null;
     setMember(m);
     if (m) {
       setName(m.name);
       setPhone(m.phone ?? "");
-      supabase
-        .from("balance_logs")
-        .select("*")
-        .eq("member_id", m.id)
-        .order("created_at", { ascending: false })
-        .limit(30)
-        .then(({ data }) => setBalanceLogs((data as BalanceLogs[]) ?? []));
+      q(() =>
+        supabase
+          .from("balance_logs")
+          .select("*")
+          .eq("member_id", m.id)
+          .order("created_at", { ascending: false })
+          .limit(30)
+      ).then(({ data }) => setBalanceLogs((data as BalanceLogs[]) ?? []));
     }
 
-    supabase
-      .from("appointments")
-      .select("*, staff(name), services(name, duration)")
-      .order("start_time", { ascending: false })
-      .limit(50)
-      .then(({ data }) => {
-        setAppointments((data as AppointmentRow[]) ?? []);
-        setLoading(false);
-      });
+    q(() =>
+      supabase
+        .from("appointments")
+        .select("*, staff(name), services(name, duration)")
+        .order("start_time", { ascending: false })
+        .limit(50)
+    ).then(({ data }) => {
+      setAppointments((data as AppointmentRow[]) ?? []);
+      setLoading(false);
+    });
   }, [router]);
 
   useEffect(() => {

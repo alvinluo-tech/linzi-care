@@ -16,6 +16,7 @@ import {
 import { Reveal } from "@/components/ui/reveal";
 import { SectionHeading } from "@/components/section-heading";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import { formatCNY, formatDuration } from "@/lib/format";
 import { sceneTagFor } from "@/lib/design";
 import { STORE_POSITIONING, STORE_VISION } from "@/lib/constants";
@@ -27,20 +28,22 @@ export default function HomePage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase
-      .from("services")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order")
-      .limit(6)
-      .then(({ data }) => setServices((data as Services[]) ?? []));
-    supabase
-      .from("products")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order")
-      .limit(4)
-      .then(({ data }) => setProducts((data as Products[]) ?? []));
+    q(() =>
+      supabase
+        .from("services")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order")
+        .limit(6)
+    ).then(({ data }) => setServices((data as Services[]) ?? []));
+    q(() =>
+      supabase
+        .from("products")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order")
+        .limit(4)
+    ).then(({ data }) => setProducts((data as Products[]) ?? []));
   }, []);
 
   return (

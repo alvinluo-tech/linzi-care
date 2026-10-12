@@ -5,7 +5,7 @@
  * - GWT（Given-When-Then）模式
  * - 顺序执行、测试隔离、测试后清理
  */
-import { ProxyAgent, setGlobalDispatcher } from "undici";
+import { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const SUPABASE_URL = "https://bzjsbiafxxgljbdcreqf.supabase.co";
@@ -18,9 +18,16 @@ export const E2E_TAG = "E2E-TEST";
 
 // 网络出口：本机直连 Supabase 常被阻断，默认走本地代理（Clash 等监听 7897）。
 // 可用 E2E_PROXY=direct 强制直连，或 E2E_PROXY=http://host:port 指定其他代理。
+// localhost/127.0.0.1 一律直连，避免本机 dev server 请求被代理劫持（502）。
 const PROXY = process.env.E2E_PROXY ?? "http://127.0.0.1:7897";
 if (PROXY !== "direct") {
-  setGlobalDispatcher(new ProxyAgent(PROXY));
+  setGlobalDispatcher(
+    new EnvHttpProxyAgent({
+      httpProxy: PROXY,
+      httpsProxy: PROXY,
+      noProxy: "localhost,127.0.0.1",
+    })
+  );
 }
 
 export const CREDENTIALS = {

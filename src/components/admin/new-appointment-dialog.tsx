@@ -23,7 +23,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
-import { addDays, dateKey, formatCNY, formatTime } from "@/lib/format";
+import { q } from "@/lib/supabase/query";
+import { broadcastAppointmentsChanged } from "@/lib/hooks";
+import {
+  addDays,
+  formatCNY,
+  formatTime,
+  storeDateKey,
+} from "@/lib/format";
 import type { Members, Services, Staff, StaffServices } from "@/lib/types";
 
 interface NewAppointmentDialogProps {
@@ -65,18 +72,18 @@ export function NewAppointmentDialog({
     setLoading(true);
     const supabase = createClient();
     Promise.all([
-      supabase
-        .from("members")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("services")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order"),
-      supabase.from("staff").select("*").eq("is_active", true).order("sort_order"),
-      supabase.from("staff_services").select("*"),
+      q(() =>
+        supabase
+          .from("members")
+          .select("*")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+      ),
+      q(() =>
+        supabase.from("services").select("*").eq("is_active", true).order("sort_order")
+      ),
+      q(() => supabase.from("staff").select("*").eq("is_active", true).order("sort_order")),
+      q(() => supabase.from("staff_services").select("*")),
     ]).then(([m, s, st, ss]) => {
       setMembers((m.data as Members[]) ?? []);
       setServices((s.data as Services[]) ?? []);
@@ -95,9 +102,11 @@ export function NewAppointmentDialog({
       setSlot("");
       setRemark("");
       const today = new Date();
-      setDate(dateKey(defaultDate ?? today));
-      setMinDate(dateKey(today));
-      setMaxDate(dateKey(addDays(today, 60)));
+      // 使用 storeDateKey 保证店铺所在东八区自然日对齐
+      const defKey = defaultDate ? storeDateKey(defaultDate) : storeDateKey(today);
+      setDate(defKey);
+      setMinDate(storeDateKey(today));
+      setMaxDate(storeDateKey(addDays(today, 60)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -121,15 +130,18 @@ export function NewAppointmentDialog({
 
   useEffect(() => {
     if (!serviceId || !staffId || !date || !open) return;
+    let cancelled = false;
     setSlotsLoading(true);
     setSlot("");
-    createClient()
-      .rpc("get_available_slots", {
+    void Promise.resolve(
+      createClient().rpc("get_available_slots", {
         p_staff_id: staffId,
         p_service_id: serviceId,
         p_date: date,
       })
+    )
       .then(({ data, error }) => {
+        if (cancelled) return;
         if (error) {
           toast.error("获取时段失败", { description: error.message });
           setSlots([]);
@@ -137,7 +149,20 @@ export function NewAppointmentDialog({
           setSlots((data as { slot_start: string }[]).map((r) => r.slot_start));
         }
         setSlotsLoading(false);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        toast.error("获取时段失败", {
+          description: e instanceof Error ? e.message : "网络异常",
+        });
+        setSlots([]);
+        setSlotsLoading(false);
       });
+
+    // 弹窗关闭或切换技师/日期后，迟到的响应不能再写状态
+    return () => {
+      cancelled = true;
+    };
   }, [serviceId, staffId, date, open]);
 
   const submit = async () => {
@@ -160,6 +185,7 @@ export function NewAppointmentDialog({
       return;
     }
     toast.success("预约已创建（已确认）");
+    broadcastAppointmentsChanged();
     onChanged();
     onOpenChange(false);
   };

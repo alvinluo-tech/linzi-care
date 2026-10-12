@@ -1,7 +1,7 @@
 // 林梓精养馆 · Service Worker (Web Push & Notification Handler)
 // 遵循标准 Web Push 协议，支持 Android Chrome 及 iOS 16.4+ (PWA standalone 模式)
 
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 

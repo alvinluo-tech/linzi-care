@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageLoader, SealMark } from "@/components/brand";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import { formatCNY, STOCK_STATUS_META } from "@/lib/format";
 import type { ProductWithCategory, Stores } from "@/lib/types";
 
@@ -41,21 +42,19 @@ function ProductDetail() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase
-      .from("products")
-      .select("*, product_categories(id, name)")
-      .eq("id", id as string)
-      .maybeSingle()
-      .then(({ data }) => {
-        setProduct((data as ProductWithCategory) ?? null);
-        setLoading(false);
-      });
-    supabase
-      .from("stores")
-      .select("*")
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => setStore((data as Stores) ?? null));
+    q(() =>
+      supabase
+        .from("products")
+        .select("*, product_categories(id, name)")
+        .eq("id", id as string)
+        .maybeSingle()
+    ).then(({ data }) => {
+      setProduct((data as ProductWithCategory) ?? null);
+      setLoading(false);
+    });
+    q(() => supabase.from("stores").select("*").limit(1).maybeSingle()).then(
+      ({ data }) => setStore((data as Stores) ?? null)
+    );
   }, [id]);
 
   if (loading) {

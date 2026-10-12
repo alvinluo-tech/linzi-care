@@ -1,4 +1,4 @@
-import { CREDENTIALS, ctx, expect, login, makeClient, q, retry, suite, waitFor } from "../setup";
+import { CREDENTIALS, ctx, expect, login, q, retry, suite, waitFor } from "../setup";
 
 /**
  * 模块四：老板确认流程与确认闭环通知
@@ -48,7 +48,7 @@ export const confirmSpec = suite("老板确认流程与确认闭环通知", [
       );
 
       const row = await retry(() =>
-        q(makeClient().from("appointments").select("status").eq("id", ctx.apptId).single())
+        q(ctx.boss.from("appointments").select("status").eq("id", ctx.apptId).single())
       );
       expect(row.status === "confirmed", `确认后状态异常: ${row.status}`);
 
@@ -69,7 +69,39 @@ export const confirmSpec = suite("老板确认流程与确认闭环通知", [
         }
       }, 30000);
       expect(!!log, "30s 内未观察到顾客确认通知记录（Webhook 链路异常）");
-      expect(log!.status === "sent", `确认通知状态应为 sent，实际 ${log!.status}`);
+
+      // 投递渠道感知断言：
+      // - 会员存在 PWA 订阅时，push 必须成功（sent）；
+      // - 无订阅且未配置 Resend 时，系统按设计落库 failed（channel=pwa）等待人工跟进，
+      //   这同样证明链路正确；
+      // - 邮件渠道 failed、或有订阅但推送 failed，都视为真实故障。
+      const memberRow = await retry(() =>
+        q(
+          ctx.boss
+            .from("members")
+            .select("user_id")
+            .eq("id", ctx.memberId)
+            .single()
+        )
+      );
+      const subs = await retry(() =>
+        q(
+          ctx.boss
+            .from("push_subscriptions")
+            .select("id")
+            .eq("user_id", memberRow.user_id)
+            .limit(1)
+        )
+      );
+      const hasPushChannel = subs.length > 0;
+
+      const chainOk =
+        log!.status === "sent" ||
+        (log!.status === "failed" && log!.channel === "pwa" && !hasPushChannel);
+      expect(
+        chainOk,
+        `确认通知链路异常: status=${log!.status}, channel=${log!.channel}, 会员推送订阅=${hasPushChannel}（email 渠道 failed 或已订阅仍失败都属故障）`
+      );
       ctx.confirmChannel = log!.channel;
     },
   },

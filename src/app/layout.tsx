@@ -4,18 +4,25 @@ import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import "./globals.css";
 
+// 第一性原理：中文用户只需要少数汉字字形，Google Fonts 按需切片（约 100+ 个
+// unicode-range 子集），浏览器只会下载页面实际用到的切片（通常 <300KB），
+// 因此这里声明全部所需字重，由 next/font 自动子集化与预加载。
 const notoSansSC = Noto_Sans_SC({
   variable: "--font-sans",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
   display: "swap",
+  preload: true,
+  fallback: ["PingFang SC", "Microsoft YaHei", "sans-serif"],
 });
 
 const notoSerifSC = Noto_Serif_SC({
   variable: "--font-serif",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "600", "700"],
   display: "swap",
+  preload: true,
+  fallback: ["Songti SC", "SimSun", "serif"],
 });
 
 const geistMono = Geist_Mono({

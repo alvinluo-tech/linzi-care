@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import {
   addDays,
   formatMD,
@@ -30,6 +31,7 @@ import {
   startOfWeekMonday,
   weekdayLabel,
 } from "@/lib/format";
+import { storeDayBoundsFromLiteral } from "@/lib/format";
 import { combineStoreDateTime } from "@/lib/constants";
 import type { Schedules, Staff } from "@/lib/types";
 
@@ -66,7 +68,9 @@ export default function AdminSchedulePage() {
   const load = useCallback(async () => {
     const supabase = createClient();
     // 先加载技师列表（含未选择技师时的默认选中），再按需加载该周排班
-    const staffRes = await supabase.from("staff").select("*").order("sort_order");
+    const staffRes = await q(() =>
+      supabase.from("staff").select("*").order("sort_order")
+    );
     const staff = (staffRes.data as Staff[]) ?? [];
     setStaffList(staff);
 
@@ -77,13 +81,15 @@ export default function AdminSchedulePage() {
       return;
     }
 
-    const scheduleRes = await supabase
-      .from("schedules")
-      .select("*")
-      .eq("staff_id", activeId)
-      .gte("start_time", weekStart.toISOString())
-      .lt("start_time", weekEnd.toISOString())
-      .order("start_time");
+    const scheduleRes = await q(() =>
+      supabase
+        .from("schedules")
+        .select("*")
+        .eq("staff_id", activeId)
+        .gte("start_time", storeDayBoundsFromLiteral(weekStart).startIso)
+        .lt("start_time", storeDayBoundsFromLiteral(weekEnd).startIso)
+        .order("start_time")
+    );
     setSchedules((scheduleRes.data as Schedules[]) ?? []);
   }, [staffId, weekStart, weekEnd]);
 

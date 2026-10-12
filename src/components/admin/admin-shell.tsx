@@ -25,6 +25,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { BrandMark } from "@/components/brand";
+import { usePendingCount } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { STORE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -79,6 +80,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 function SideContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  // 待确认角标：无论身在哪个管理页，都能看到有客单等着接
+  const pendingCount = usePendingCount();
 
   const isActive = (item: (typeof NAV_ITEMS)[number]) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href);
@@ -86,7 +89,6 @@ function SideContent({ onNavigate }: { onNavigate?: () => void }) {
   const signOut = async () => {
     await createClient().auth.signOut();
     router.push("/");
-    router.refresh();
   };
 
   return (
@@ -121,6 +123,16 @@ function SideContent({ onNavigate }: { onNavigate?: () => void }) {
               )}
             />
             {item.label}
+            {item.href === "/admin" &&
+              pendingCount !== null &&
+              pendingCount > 0 && (
+                <span
+                  aria-label={`${pendingCount} 单待确认`}
+                  className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-bronze-500 px-1.5 font-mono text-[11px] leading-none text-white"
+                >
+                  {pendingCount}
+                </span>
+              )}
           </Link>
         ))}
       </nav>

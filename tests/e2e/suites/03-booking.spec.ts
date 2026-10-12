@@ -1,4 +1,4 @@
-import { CREDENTIALS, ctx, E2E_TAG, expect, login, makeClient, q, retry, suite } from "../setup";
+import { CREDENTIALS, ctx, E2E_TAG, expect, login, q, retry, suite } from "../setup";
 
 /**
  * 模块三：顾客预约旅程
@@ -65,9 +65,10 @@ export const bookingSpec = suite("顾客预约旅程", [
       expect(!!aptId, "预约未返回单号");
       ctx.apptId = aptId;
 
+      // 用会员自己的客户端验证（RLS：会员可见本人预约；匿名不可见）
       const row = await retry(() =>
         q(
-          makeClient()
+          ctx.member
             .from("appointments")
             .select("status, start_time, end_time, remark")
             .eq("id", ctx.apptId)
@@ -110,7 +111,7 @@ export const bookingSpec = suite("顾客预约旅程", [
       const member = ctx.member;
       await retry(() => member.rpc("cancel_appointment", { p_appointment_id: ctx.apptId }));
       const row = await retry(() =>
-        q(makeClient().from("appointments").select("status").eq("id", ctx.apptId).single())
+        q(ctx.member.from("appointments").select("status").eq("id", ctx.apptId).single())
       );
       expect(row.status === "cancelled", `取消后状态应为 cancelled，实际 ${row.status}`);
     },
@@ -135,7 +136,7 @@ export const bookingSpec = suite("顾客预约旅程", [
       ctx.apptId = aptId;
 
       const row = await retry(() =>
-        q(makeClient().from("appointments").select("status").eq("id", ctx.apptId).single())
+        q(ctx.member.from("appointments").select("status").eq("id", ctx.apptId).single())
       );
       expect(row.status === "pending", "重新预约应为 pending");
     },

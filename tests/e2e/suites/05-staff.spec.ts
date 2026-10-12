@@ -1,4 +1,4 @@
-import { CREDENTIALS, ctx, expect, login, makeClient, q, retry, suite } from "../setup";
+import { CREDENTIALS, ctx, expect, login, q, retry, suite } from "../setup";
 
 /**
  * 模块五：技师打点与状态机硬约束
@@ -8,14 +8,17 @@ export const staffSpec = suite("技师打点与状态机硬约束", [
     name: "GIVEN 已确认单 WHEN 技师打点「顾客到店」 THEN 成功且状态 arrived",
     run: async () => {
       const staff = ctx.staff ?? (await login(CREDENTIALS.staff.email, CREDENTIALS.staff.password));
-      await retry(() =>
+      // RPC 失败必须显式断言：supabase-js 不 throw，忽略 error 会让"被外部干扰
+      // （如真人同时在操作管理端把单据流转走）"伪装成后续断言的神秘失败。
+      const { error } = await retry(() =>
         staff.rpc("update_appointment_status", {
           p_appointment_id: ctx.apptId,
           p_status: "arrived",
         })
       );
+      expect(!error, `技师打点「顾客到店」失败（可能被其他操作抢先流转）: ${error?.message}`);
       const row = await retry(() =>
-        q(makeClient().from("appointments").select("status").eq("id", ctx.apptId).single())
+        q(ctx.boss.from("appointments").select("status").eq("id", ctx.apptId).single())
       );
       expect(row.status === "arrived", `状态应为 arrived，实际 ${row.status}`);
     },
@@ -24,14 +27,15 @@ export const staffSpec = suite("技师打点与状态机硬约束", [
     name: "GIVEN 已到店 WHEN 技师打点「完成服务」 THEN 成功且状态 done",
     run: async () => {
       const staff = ctx.staff;
-      await retry(() =>
+      const { error } = await retry(() =>
         staff.rpc("update_appointment_status", {
           p_appointment_id: ctx.apptId,
           p_status: "done",
         })
       );
+      expect(!error, `技师打点「完成服务」失败: ${error?.message}`);
       const row = await retry(() =>
-        q(makeClient().from("appointments").select("status").eq("id", ctx.apptId).single())
+        q(ctx.boss.from("appointments").select("status").eq("id", ctx.apptId).single())
       );
       expect(row.status === "done", `状态应为 done，实际 ${row.status}`);
     },
@@ -79,12 +83,13 @@ export const staffSpec = suite("技师打点与状态机硬约束", [
         .eq("id", ctx.apptId)
         .select("id", { count: "exact" });
 
+      // PostgREST 对 RLS 拦截的 0 行更新：无 error、data 为空数组、count 为 0 或 null
       expect(
-        !error && count === 0,
-        `会员直改预约状态应被 RLS 拦截为 0 行，实际 error=${error?.message} count=${count}`
+        !error && data.length === 0 && (count ?? 0) === 0,
+        `会员直改预约状态应被 RLS 拦截为 0 行，实际 error=${error?.message} count=${count} data=${JSON.stringify(data)}`
       );
       const row = await retry(() =>
-        q(makeClient().from("appointments").select("status").eq("id", ctx.apptId).single())
+        q(ctx.boss.from("appointments").select("status").eq("id", ctx.apptId).single())
       );
       expect(row.status === "done", "会员直改后状态竟发生变化");
     },

@@ -1,5 +1,7 @@
 "use client";
 
+import { storeDayBounds } from "@/lib/format";
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -29,11 +31,15 @@ import { AppointmentDialog } from "@/components/admin/appointment-dialog";
 import { NewAppointmentDialog } from "@/components/admin/new-appointment-dialog";
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import { addDays, formatCNY, formatTime, startOfLocalDay } from "@/lib/format";
 import type { AppointmentWithRefs, Members } from "@/lib/types";
 
 export default function AdminDashboardPage() {
   const [todayAppointments, setTodayAppointments] = useState<
+    AppointmentWithRefs[] | null
+  >(null);
+  const [pendingAppointments, setPendingAppointments] = useState<
     AppointmentWithRefs[] | null
   >(null);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
@@ -47,8 +53,8 @@ export default function AdminDashboardPage() {
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const todayStart = startOfLocalDay(new Date());
-    const tomorrowStart = addDays(todayStart, 1);
+    const dayWindow = storeDayBounds(new Date());
+    
     const monthStart = new Date(
       new Date().getFullYear(),
       new Date().getMonth(),
@@ -56,30 +62,42 @@ export default function AdminDashboardPage() {
     );
 
     const [today, pending, done, members] = await Promise.all([
-      supabase
-        .from("appointments")
-        .select(
-          "*, members(id, name, phone), staff(id, name, title), services(id, name, duration, price)"
-        )
-        .gte("start_time", todayStart.toISOString())
-        .lt("start_time", tomorrowStart.toISOString())
-        .order("start_time"),
-      supabase
-        .from("appointments")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
-      supabase
-        .from("appointments")
-        .select("services(price)", { count: "exact" })
-        .eq("status", "done")
-        .gte("start_time", monthStart.toISOString()),
-      supabase.from("members").select("id, balance", { count: "exact" }),
+      q(() =>
+        supabase
+          .from("appointments")
+          .select(
+            "*, members(id, name, phone), staff(id, name, title), services(id, name, duration, price)"
+          )
+          .gte("start_time", dayWindow.startIso)
+          .lt("start_time", dayWindow.endIso)
+          .order("start_time")
+      ),
+      q(() =>
+        supabase
+          .from("appointments")
+          .select(
+            "*, members(id, name, phone), staff(id, name, title), services(id, name, duration, price)"
+          )
+          .eq("status", "pending")
+          .order("start_time")
+      ),
+      q(() =>
+        supabase
+          .from("appointments")
+          .select("services(price)", { count: "exact" })
+          .eq("status", "done")
+          .gte("start_time", monthStart.toISOString())
+      ),
+      q(() => supabase.from("members").select("id, balance", { count: "exact" })),
     ]);
 
     setTodayAppointments(
       (today.data as unknown as AppointmentWithRefs[]) ?? []
     );
-    setPendingCount(pending.count ?? 0);
+    const pendingRows =
+      (pending.data as unknown as AppointmentWithRefs[]) ?? [];
+    setPendingAppointments(pendingRows);
+    setPendingCount(pendingRows.length);
     setMonthDone(done.count ?? 0);
     const doneRows =
       (done.data as { services: { price: number } | null }[] | null) ?? [];
@@ -143,8 +161,13 @@ export default function AdminDashboardPage() {
           badge="待决"
           label="待确认预约"
           value={pendingCount === null ? null : `${pendingCount} 单`}
-          sub="顾客前台递出，待掌柜接单"
+          sub="顾客前台递出，待掌柜接单 · 点击直达接单专区"
           accent
+          onClick={() =>
+            document
+              .getElementById("pending-panel")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
         />
         <StatCard
           icon={ChartColumnBig}
@@ -175,6 +198,99 @@ export default function AdminDashboardPage() {
           value={memberCount === null ? null : formatCNY(balanceSum)}
           sub="纯服务端权威字段，受触发器严密保护"
         />
+      </div>
+
+      {/* 待确认预约专栏：常驻显示，是掌柜接单的唯一固定入口（空态也有引导，避免入口"隐身"） */}
+      <div
+        id="pending-panel"
+        className={`scroll-mt-24 overflow-hidden rounded-2xl border p-6 shadow-sm ${
+          pendingAppointments && pendingAppointments.length > 0
+            ? "border-amber-300/80 bg-gradient-to-br from-amber-50/70 via-card to-amber-50/40"
+            : "border-border/80 bg-card"
+        }`}
+      >
+        <div
+          className={`flex items-center justify-between border-b pb-3.5 ${
+            pendingAppointments && pendingAppointments.length > 0
+              ? "border-amber-200/70"
+              : "border-border/70"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Hourglass
+              className={`size-4 ${
+                pendingAppointments && pendingAppointments.length > 0
+                  ? "text-amber-700"
+                  : "text-bark-400"
+              }`}
+            />
+            <h2
+              className={`font-serif text-base font-medium ${
+                pendingAppointments && pendingAppointments.length > 0
+                  ? "text-amber-950"
+                  : "text-bark-800"
+              }`}
+            >
+              待确认预约 ({pendingAppointments?.length ?? "…"})
+            </h2>
+          </div>
+          <span
+            className={`text-xs ${
+              pendingAppointments && pendingAppointments.length > 0
+                ? "text-amber-800/80"
+                : "text-bark-400"
+            }`}
+          >
+            收到顾客预约后，在此确认接单
+          </span>
+        </div>
+
+        {pendingAppointments === null ? (
+          <div className="mt-4 space-y-2.5">
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : pendingAppointments.length === 0 ? (
+          <div className="flex flex-col items-center gap-1.5 py-10 text-center">
+            <p className="font-serif text-sm text-bark-500">
+              当前没有待确认的预约
+            </p>
+            <p className="max-w-md text-xs leading-relaxed text-bark-400">
+              顾客在预约页下单后，客单会实时出现在这里（同时收到提示音与手机推送）。
+              点击任一客单的「确认接单」即完成确认，顾客会同步收到通知。
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-2.5">
+            {pendingAppointments.map((a) => (
+              <div
+                key={a.id}
+                role="button"
+                tabIndex={0}
+                className="flex cursor-pointer flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/90 bg-card/90 p-4 transition-all duration-200 hover:border-amber-400 hover:shadow-xs"
+                onClick={() => setSelected(a)}
+              >
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-serif text-base font-medium text-bark-800">
+                      {a.members?.name ?? "匿名会员"}
+                    </span>
+                    <span className="font-serif text-xs text-bronze-700">
+                      {a.services?.name ?? "理疗服务"}
+                    </span>
+                    <StatusBadge status={a.status} />
+                  </div>
+                  <p className="mt-1 text-xs text-bark-500">
+                    预约时段：{formatTime(a.start_time)} – {formatTime(a.end_time)} · 指派技师：{a.staff?.name ?? "—"}
+                    {a.remark ? ` · 备注：${a.remark}` : ""}
+                  </p>
+                </div>
+                <Button size="sm" className="bg-bronze-500 text-xs text-white hover:bg-bronze-600">
+                  处理此单
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 今日排班与预约手折 */}
@@ -286,6 +402,7 @@ function StatCard({
   value,
   sub,
   accent,
+  onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   badge: string;
@@ -293,10 +410,26 @@ function StatCard({
   value: string | null;
   sub: string;
   accent?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       className={`relative flex flex-col justify-between overflow-hidden rounded-2xl border p-6 shadow-sm transition-all duration-300 hover:shadow-md ${
+        onClick ? "cursor-pointer" : ""
+      } ${
         accent
           ? "border-bronze-300/90 bg-gradient-to-br from-card via-paper to-bronze-50/50"
           : "border-border/80 bg-card"

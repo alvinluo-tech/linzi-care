@@ -45,10 +45,34 @@
 - 授权后，系统弹窗即与原生 App 体验完全一致。
 
 ### 3. 后端自动化链路
-- **预约创建/状态变更**：触发 Database Webhook，异步调用 `send-push` 实时向老板和技师推送通知。
+- **预约创建/状态变更**：触发 Database Webhook，异步调用 `send-push` 实时向老板和技师推送通知（老板落点 `/admin` 接单专区，技师落点 `/staff`）。
 - **预约到期提醒**：触发器自动计算提前 2 小时的时间点写入 `reminders` 表；`pg_cron` 每 5 分钟轮询，调用 `send-push` 向顾客推送。
 - **失效订阅自愈**：当用户卸载应用或重置浏览器导致推送返回 404/410 时，后端自动从数据库清理该失效端点。
 - **邮件兜底**：若顾客未开启 PWA 推送或推送发送失败，系统自动降级调用 Resend 发送邮件提醒。
+
+### 4. ⚠️ 通知链路服务鉴权（密钥轮换时的必读项）
+
+Database Webhook（`0008/0009` 迁移）与 `pg_cron`（`0007` 迁移）以
+`Authorization: Bearer <service_role key>` 调用 `send-push`。
+
+Supabase 项目启用**新式 API 密钥体系**后，Edge Function 运行时的
+`SUPABASE_SERVICE_ROLE_KEY` 可能与数据库持有的这个旧式 JWT **不再是同一个值**，
+届时数据库侧全部调用会被 401 拒绝——**表现为：新预约照常响铃，但确认通知、
+到期提醒静默失效**（本项目曾出现过整条链路静默失败）。
+
+为消除该隐患，`send-push` 的鉴权（`supabase/functions/_shared/auth.ts`）额外接受
+一个由我们自己设定的 `WEBHOOK_SERVICE_TOKEN` 密钥，其当前值 =
+数据库触发器/定时任务发送的 service_role 旧式 JWT。修复命令：
+
+```bash
+npx supabase secrets set WEBHOOK_SERVICE_TOKEN=<数据库触发器内 Authorization 的 Bearer 值> --project-ref bzjsbiafxxgljbdcreqf
+```
+
+> **轮换 API 密钥时**：同步更新该 secret（或在数据库侧把触发器与 cron 任务的
+> Authorization 换成新值），更新后务必做一次真实预约→确认，确认
+> `notifications` 表出现 `type='confirmation'` 记录，才算链路完好。
+> 排查提示：`select * from notifications order by created_at desc limit 5;`
+> 若确认后 30 秒内无记录，即为此鉴权问题（或函数 `send-push` 未上线）。
 
 ---
 

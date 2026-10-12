@@ -13,6 +13,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/status-badge";
 import { createClient } from "@/lib/supabase/client";
+import { broadcastAppointmentsChanged } from "@/lib/hooks";
 import { formatCNY, formatDateTime, formatDuration, formatTime } from "@/lib/format";
 import type { AppointmentWithRefs } from "@/lib/types";
 
@@ -44,6 +45,7 @@ export function AppointmentDialog({
       return;
     }
     toast.success(`已标记为「${label}」`);
+    broadcastAppointmentsChanged();
     onChanged();
     onOpenChange(false);
   };
@@ -59,6 +61,7 @@ export function AppointmentDialog({
       return;
     }
     toast.success("预约已取消");
+    broadcastAppointmentsChanged();
     onChanged();
     onOpenChange(false);
   };

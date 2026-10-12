@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageLoader, SealMark } from "@/components/brand";
 import { Reveal } from "@/components/ui/reveal";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import { formatCNY, STOCK_STATUS_META } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ProductWithCategory } from "@/lib/types";
@@ -20,17 +21,21 @@ export default function ShopPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase
-      .from("products")
-      .select("*, product_categories(id, name)")
-      .eq("is_active", true)
-      .order("sort_order")
-      .then(({ data }) => setProducts((data as ProductWithCategory[]) ?? []));
-    supabase
-      .from("product_categories")
-      .select("id, name")
-      .order("sort_order")
-      .then(({ data }) => setCategories((data as { id: string; name: string }[]) ?? []));
+    q(() =>
+      supabase
+        .from("products")
+        .select("*, product_categories(id, name)")
+        .eq("is_active", true)
+        .order("sort_order")
+    ).then(({ data }) => setProducts((data as ProductWithCategory[]) ?? []));
+    q(() =>
+      supabase
+        .from("product_categories")
+        .select("id, name")
+        .order("sort_order")
+    ).then(({ data }) =>
+      setCategories((data as { id: string; name: string }[]) ?? [])
+    );
   }, []);
 
   const filtered = useMemo(() => {

@@ -257,6 +257,20 @@ export interface Database {
         Args: Record<string, never>;
         Returns: string;
       };
+      my_guest_appointments: {
+        Args: Record<string, never>;
+        Returns: {
+          appointment_id: string;
+          start_time: string;
+          end_time: string;
+          status: string;
+          remark: string | null;
+          service_name: string;
+          service_duration: number;
+          member_name: string | null;
+          member_phone: string | null;
+        }[];
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

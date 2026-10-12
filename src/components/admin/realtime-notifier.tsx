@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { formatDateTime } from "@/lib/format";
-import { APPOINTMENTS_CHANGED_EVENT } from "@/lib/hooks";
+import { broadcastAppointmentsChanged } from "@/lib/hooks";
 
 interface NewAppointmentPayload {
   members: { name: string | null } | null;
@@ -15,11 +16,12 @@ interface NewAppointmentPayload {
 
 /** 管理端 Realtime 订阅：新预约实时提醒（弹窗 + 声音），并广播变更事件 */
 export function RealtimeNotifier() {
+  const router = useRouter();
+
   useEffect(() => {
     const supabase = createClient();
 
-    const broadcast = () =>
-      window.dispatchEvent(new CustomEvent(APPOINTMENTS_CHANGED_EVENT));
+    const broadcast = () => broadcastAppointmentsChanged();
 
     const channel = supabase
       .channel("admin-appointments")
@@ -44,7 +46,11 @@ export function RealtimeNotifier() {
               }`;
             }
           }
-          toast("🔔 收到新预约", { description, duration: 10000 });
+          toast("🔔 收到新预约", {
+            description,
+            duration: 10000,
+            action: { label: "去确认", onClick: () => router.push("/admin") },
+          });
           playChime();
           broadcast();
         }
@@ -64,15 +70,21 @@ export function RealtimeNotifier() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [router]);
 
   return null;
 }
 
 /** 两音提示音；受浏览器自动播放策略限制时静默失败 */
+let chimeCtx: AudioContext | null = null;
+
 function playChime() {
   try {
-    const ctx = new AudioContext();
+    // 复用同一个 AudioContext：每响一次新建一个会泄漏硬件上下文，
+    // 累积到浏览器上限后提示音会彻底静默失效。
+    chimeCtx ??= new AudioContext();
+    const ctx = chimeCtx;
+    if (ctx.state === "suspended") void ctx.resume();
     const notes = [880, 1174.66];
     notes.forEach((freq, i) => {
       const start = ctx.currentTime + i * 0.18;

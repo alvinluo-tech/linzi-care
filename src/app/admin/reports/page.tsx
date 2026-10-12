@@ -30,7 +30,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { q } from "@/lib/supabase/query";
-import { dateKey, formatCNY, startOfLocalDay } from "@/lib/format";
+import {
+  combineStoreDateTime,
+  formatCNY,
+  storeDateKey,
+} from "@/lib/format";
 import type { Appointments, Members, Services, Staff } from "@/lib/types";
 
 interface ReportData {
@@ -67,15 +71,19 @@ export default function AdminReportsPage() {
   useEffect(() => {
     setMounted(true);
     const now = new Date();
-    setFrom(dateKey(new Date(now.getFullYear(), now.getMonth(), 1)));
-    setTo(dateKey(startOfLocalDay(now)));
+    setFrom(storeDateKey(now).slice(0, 7) + "-01");
+    setTo(storeDateKey(now));
   }, []);
 
   const load = useCallback(async () => {
     if (!from || !to) return;
     const supabase = createClient();
-    const startIso = new Date(`${from}T00:00:00`).toISOString();
-    const endIso = new Date(`${to}T23:59:59.999`).toISOString();
+    // 严格按店铺东八区营业时间边界生成查询区间 [YYYY-MM-DD 00:00:00+08:00, YYYY-MM-DD 23:59:59.999+08:00]
+    const startIso = combineStoreDateTime(from, "00:00");
+    // 次日 00:00 之前（等价于当日 24:00）
+    const nextDate = new Date(`${to}T00:00:00Z`);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const endIso = combineStoreDateTime(nextDate.toISOString().slice(0, 10), "00:00");
 
     const [aptRes, servicesRes, staffRes, membersRes] = await Promise.all([
       q(() =>
@@ -83,12 +91,15 @@ export default function AdminReportsPage() {
           .from("appointments")
           .select("*, services(name, price)")
           .gte("start_time", startIso)
-          .lte("start_time", endIso)
+          .lt("start_time", endIso)
           .order("start_time")
+          .limit(5000)
       ),
-      q(() => supabase.from("services").select("*")),
-      q(() => supabase.from("staff").select("*")),
-      q(() => supabase.from("members").select("*")),
+      // 只取报表真正用到的列：原先三张表都是 select("*")，
+      // 会把会员的手机号/备注等与报表无关的字段整表拉到浏览器
+      q(() => supabase.from("services").select("id, name, price, member_price")),
+      q(() => supabase.from("staff").select("id, name")),
+      q(() => supabase.from("members").select("id, created_at, balance")),
     ]);
 
     setData({
@@ -115,15 +126,16 @@ export default function AdminReportsPage() {
     const done = apts.filter((a) => a.status === "done");
     const cancelled = apts.filter((a) => a.status === "cancelled");
     const noShow = apts.filter((a) => a.status === "no_show");
-    const priceOf = (serviceId: string) =>
-      data.services.find((s) => s.id === serviceId)?.price ?? 0;
+    // O(1) 查价：原来每条预约都对整张 services 做 Array.find（预约数 × 服务数）
+    const priceById = new Map(data.services.map((s) => [s.id, Number(s.price)] as const));
+    const priceOf = (serviceId: string) => priceById.get(serviceId) ?? 0;
 
     const revenue = done.reduce((sum, a) => sum + Number(priceOf(a.service_id)), 0);
 
     // 1. 每日营收与客次趋势
     const dailyMap = new Map<string, { date: string; revenue: number; count: number }>();
     for (const a of apts) {
-      const day = dateKey(new Date(a.start_time));
+      const day = storeDateKey(a.start_time);
       const cur = dailyMap.get(day) ?? { date: day.slice(5), revenue: 0, count: 0 };
       if (a.status === "done") {
         cur.revenue += Number(priceOf(a.service_id));
@@ -155,9 +167,10 @@ export default function AdminReportsPage() {
 
     // 3. 技师接单负载
     const byStaff = new Map<string, { name: string; count: number; doneCount: number }>();
+    const staffNameById = new Map(data.staff.map((s) => [s.id, s.name] as const));
     for (const a of apts) {
       if (a.status === "cancelled") continue;
-      const staffName = data.staff.find((s) => s.id === a.staff_id)?.name ?? "未知工匠";
+      const staffName = staffNameById.get(a.staff_id) ?? "未知工匠";
       const prev = byStaff.get(staffName) ?? { name: staffName, count: 0, doneCount: 0 };
       if (a.status === "done") prev.doneCount += 1;
       prev.count += 1;
@@ -176,12 +189,14 @@ export default function AdminReportsPage() {
       color: STATUS_COLORS[st] ?? "#a8a29e",
     }));
 
+    const startUtc = new Date(combineStoreDateTime(from, "00:00"));
+    const nextDate = new Date(`${to}T00:00:00Z`);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const endUtc = new Date(combineStoreDateTime(nextDate.toISOString().slice(0, 10), "00:00"));
+
     const newMembers = data.members.filter((m) => {
       const created = new Date(m.created_at);
-      return (
-        created >= new Date(`${from}T00:00:00`) &&
-        created <= new Date(`${to}T23:59:59.999`)
-      );
+      return created >= startUtc && created < endUtc;
     });
 
     return {

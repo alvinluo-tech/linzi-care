@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Clock, Sparkles } from "lucide-react";
+import { ArrowRight, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal } from "@/components/ui/reveal";
 import { OrnamentDivider, SealMark } from "@/components/brand";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import { formatCNY, formatDuration } from "@/lib/format";
 import { sceneTagFor } from "@/lib/design";
 import type { Services } from "@/lib/types";
@@ -17,12 +18,13 @@ export default function ServicesPage() {
   const [category, setCategory] = useState("全部");
 
   useEffect(() => {
-    createClient()
-      .from("services")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order")
-      .then(({ data }) => setServices((data as Services[]) ?? []));
+    q(() =>
+      createClient()
+        .from("services")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order")
+    ).then(({ data }) => setServices((data as Services[]) ?? []));
   }, []);
 
   const categories = useMemo(() => {

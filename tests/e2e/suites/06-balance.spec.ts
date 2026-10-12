@@ -1,4 +1,4 @@
-import { CREDENTIALS, ctx, expect, login, makeClient, q, retry, suite } from "../setup";
+import { CREDENTIALS, ctx, expect, login, q, retry, suite } from "../setup";
 
 /**
  * 模块六：会员余额安全与审计
@@ -19,8 +19,9 @@ export const balanceSpec = suite("会员余额安全与审计", [
         `拒绝原因异常: ${error!.message}`
       );
 
+      // 用会员自己的客户端验证（RLS：会员可见本人余额；匿名不可见）
       const row = await retry(() =>
-        q(makeClient().from("members").select("balance").eq("id", ctx.memberId).single())
+        q(ctx.member.from("members").select("balance").eq("id", ctx.memberId).single())
       );
       ctx.originalBalance = Number(row.balance);
       expect(Number(row.balance) !== 999999, "余额竟被篡改");
