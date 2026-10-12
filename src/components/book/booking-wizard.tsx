@@ -65,6 +65,10 @@ export function BookingWizard() {
   const [authChecked, setAuthChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [bookedId, setBookedId] = useState<string | null>(null);
+  // 老板已确认的规则：券优先于余额。所以这里不做得选，命中就自动用。
+  const [passes, setPasses] = useState<
+    { id: string; title: string; expires_at: string | null }[]
+  >([]);
 
   const restoreDraft = useCallback(() => {
     try {
@@ -150,6 +154,48 @@ export function BookingWizard() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!member || !serviceId) {
+      setPasses([]);
+      return;
+    }
+    let cancelled = false;
+    // RLS 的 service_passes_select_own_or_admin 已限定只能读到自己那张
+    q(() =>
+      createClient()
+        .from("service_passes")
+        .select("id, title, expires_at")
+        .eq("member_id", member.id)
+        .eq("service_id", serviceId)
+        .eq("status", "active")
+        .order("expires_at", { ascending: true, nullsFirst: false })
+    )
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          toast.error("会籍权益加载失败", { description: error.message });
+          setPasses([]);
+          return;
+        }
+        const now = Date.now();
+        setPasses(
+          ((data as { id: string; title: string; expires_at: string | null }[]) ?? []).filter(
+            (p) => !p.expires_at || new Date(p.expires_at).getTime() > now
+          )
+        );
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        toast.error("会籍权益加载失败", {
+          description: e instanceof Error ? e.message : "网络异常",
+        });
+        setPasses([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [member, serviceId]);
 
   const service = useMemo(
     () => services?.find((s) => s.id === serviceId) ?? null,
@@ -239,6 +285,7 @@ export function BookingWizard() {
       p_service_id: serviceId,
       p_start_time: slot,
       p_remark: remark || undefined,
+      p_pass_id: passes[0]?.id,
     });
     setSubmitting(false);
 
@@ -282,9 +329,11 @@ export function BookingWizard() {
             <SummaryLine
               label="礼遇价格"
               value={
-                service?.member_price != null
-                  ? `${formatCNY(service.member_price)}（会员专享价 · 到店支付）`
-                  : `${formatCNY(service?.price ?? 0)} · 到店支付`
+                passes.length > 0
+                  ? `已核销会籍权益 · ${passes[0].title}（剩 ${passes.length - 1} 张）`
+                  : service?.member_price != null
+                    ? `${formatCNY(service.member_price)}（会员专享价 · 从会籍余额扣除）`
+                    : `${formatCNY(service?.price ?? 0)} · 从会籍余额扣除`
               }
             />
           </div>
