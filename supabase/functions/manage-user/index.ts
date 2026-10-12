@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
         return json({ error: "未知的 action" }, 400);
     }
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    console.error("manage-user fatal:", e);
+    return json({ error: "账号操作失败，请稍后重试" }, 500);
   }
 });

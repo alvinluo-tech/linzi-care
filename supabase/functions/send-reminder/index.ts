@@ -171,6 +171,7 @@ Deno.serve(async (req) => {
 
     return json({ ok: true, total: appointments?.length ?? 0, sent, skipped, failed });
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    console.error("send-reminder fatal:", e);
+    return json({ error: "提醒服务处理失败，请稍后重试" }, 500);
   }
 });

@@ -118,6 +118,7 @@ Deno.serve(async (req) => {
       message: "请立即记录，密码仅此一次展示",
     });
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    console.error("create-user fatal:", e);
+    return json({ error: "创建账号失败，请稍后重试" }, 500);
   }
 });

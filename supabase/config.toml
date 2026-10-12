@@ -416,7 +416,7 @@ enabled = true
 
 [functions.create-user]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/create-user/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -427,7 +427,7 @@ entrypoint = "./functions/create-user/index.ts"
 
 [functions.manage-user]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/manage-user/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -438,7 +438,7 @@ entrypoint = "./functions/manage-user/index.ts"
 
 [functions.send-reminder]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/send-reminder/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -449,7 +449,7 @@ entrypoint = "./functions/send-reminder/index.ts"
 
 [functions.send-push]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 import_map = "./functions/send-push/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

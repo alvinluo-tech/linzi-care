@@ -8,8 +8,8 @@
 
 import "@supabase/functions-js/edge-runtime.d.ts";
 import webpush from "npm:web-push@3.6.7";
-import { createClient } from "npm:@supabase/supabase-js@2";
 import { json, preflight } from "../_shared/cors.ts";
+import { requireAdminOrService, serviceClient } from "../_shared/auth.ts";
 
 const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
@@ -19,14 +19,6 @@ const RESEND_FROM = Deno.env.get("RESEND_FROM") || "林梓精养馆 <onboarding@
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
-
-function getAdminClient() {
-  return createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
 }
 
 function escapeHtml(text: string): string {
@@ -51,8 +43,13 @@ Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
 
+  const supabase = serviceClient();
+
+  // 只允许携带 service_role 的 pg_cron / Database Webhook，或已登录的老板手动触发
+  const auth = await requireAdminOrService(supabase, req);
+  if (!auth.ok) return auth.response;
+
   try {
-    const supabase = getAdminClient();
     const body = await req.json().catch(() => ({}));
     const action = body.action || "process_reminders";
 
@@ -81,7 +78,7 @@ Deno.serve(async (req) => {
     return json({ error: "Unknown action", action }, 400);
   } catch (e) {
     console.error("send-push fatal:", e);
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    return json({ error: "推送服务处理失败，请稍后重试" }, 500);
   }
 });
 
@@ -280,27 +277,39 @@ async function handleAppointmentWebhook(supabase: any, payload: any) {
     .select("user_id")
     .eq("role", "admin");
 
-  const notifyUserIds = new Set<string>();
-  (adminRoles || []).forEach((r: any) => notifyUserIds.add(r.user_id));
-
-  // 2. 如果分配了技师且有关联账号，也通知技师
-  if (apt.staff?.user_id) {
-    notifyUserIds.add(apt.staff.user_id);
-  }
+  const adminIds = new Set<string>(
+    (adminRoles || []).map((r: any) => r.user_id)
+  );
+  const staffUserId: string | null = apt.staff?.user_id || null;
 
   const isInsert = payload.type === "INSERT";
   const title = isInsert ? "🔔 收到新预约通知" : "📋 预约状态变动通知";
   const bodyText = `${memberName} 预约了「${serviceName}」，时间：${timeText}，指派技师：${staffName}（状态：${apt.status}）`;
 
+  // 推送落点分流：老板落到接单专区（/admin 顶部），技师落到自己的待办页（/staff）。
+  // 落点不对（比如技师点开管理台被重定向）会让"收到通知→去处理"的链路多一次跳转。
   let totalPushed = 0;
-  for (const uid of notifyUserIds) {
+  const notifiedUsers = new Set<string>();
+  for (const uid of adminIds) {
     const res = await pushToUser(supabase, uid, {
       title,
       body: bodyText,
-      url: "/admin/calendar",
+      url: "/admin",
       tag: `apt-${apt.id}`,
     });
     totalPushed += res.success;
+    notifiedUsers.add(uid);
+  }
+  // 2. 如果分配了技师且有关联账号，也通知技师
+  if (staffUserId && !adminIds.has(staffUserId)) {
+    const res = await pushToUser(supabase, staffUserId, {
+      title,
+      body: bodyText,
+      url: "/staff",
+      tag: `apt-${apt.id}`,
+    });
+    totalPushed += res.success;
+    notifiedUsers.add(staffUserId);
   }
 
   // 3. 确认闭环：pending→confirmed 流转（或代客预约直建 confirmed）时，通知顾客
@@ -320,7 +329,7 @@ async function handleAppointmentWebhook(supabase: any, payload: any) {
 
   return json({
     ok: true,
-    notified_users: notifyUserIds.size,
+    notified_users: notifiedUsers.size,
     total_pushed: totalPushed,
     customer_notified: customerNotified,
   });
