@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Noto_Sans_SC, Noto_Serif_SC } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
+import { SessionOnlyGuard } from "@/components/session-only-guard";
 import "./globals.css";
 
 // 第一性原理：中文用户只需要少数汉字字形，Google Fonts 按需切片（约 100+ 个
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         {children}
         <ServiceWorkerRegister />
+        <SessionOnlyGuard />
         <Toaster richColors position="top-center" />
       </body>
     </html>

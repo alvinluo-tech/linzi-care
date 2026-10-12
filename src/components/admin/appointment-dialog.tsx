@@ -41,6 +41,7 @@ export function AppointmentDialog({
     });
     setBusy(false);
     if (error) {
+      // 不用乐观更新：状态机可能拒绝（如终态保护），必须等服务端裁决后再提示
       toast.error("操作失败", { description: error.message });
       return;
     }
@@ -60,7 +61,11 @@ export function AppointmentDialog({
       toast.error("取消失败", { description: error.message });
       return;
     }
-    toast.success("预约已取消");
+    // 取消会立刻退款/退券且不可逆（cancelled 是终态，状态机不允许恢复），
+    // 因此不做乐观更新、也不提供「撤销」——只如实告知已完成的操作。
+    toast.success("预约已取消，款项已退回", {
+      description: "该操作不可撤销，如需重新预约请再建一单",
+    });
     broadcastAppointmentsChanged();
     onChanged();
     onOpenChange(false);

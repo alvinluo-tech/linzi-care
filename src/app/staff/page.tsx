@@ -117,19 +117,67 @@ export default function StaffPage() {
   /** 技师打点：到店 / 完成 / 未到店（仅限分配给自己的客单） */
   const [marking, setMarking] = useState<string | null>(null);
   const mark = async (id: string, status: "arrived" | "done" | "no_show") => {
+    const target = appointments.find((a) => a.appointment_id === id);
+    if (!target) return;
+    const prevStatus = target.status;
+    const label =
+      status === "arrived" ? "已标记顾客到店" : status === "done" ? "服务已完成" : "已标记顾客未到";
+
+    // 乐观更新：先本地改状态，界面立刻响应（弱网下不再转圈等待）
     setMarking(`${id}:${status}`);
+    setAppointments((list) =>
+      list.map((a) => (a.appointment_id === id ? { ...a, status } : a))
+    );
+
     const { error } = await createClient().rpc("update_appointment_status", {
       p_appointment_id: id,
       p_status: status,
     });
     setMarking(null);
+
     if (error) {
-      toast.error("操作失败", { description: error.message });
+      // 回滚：把状态改回点击前，并明确告知未生效 ——
+      // 宁可显示"没成功"，也不能让乐观更新伪装成成功。
+      setAppointments((list) =>
+        list.map((a) =>
+          a.appointment_id === id ? { ...a, status: prevStatus } : a
+        )
+      );
+      toast.error("操作未生效", { description: error.message });
       return;
     }
-    toast.success(
-      status === "arrived" ? "已标记顾客到店" : status === "done" ? "服务已完成" : "已标记顾客未到"
+
+    // 「未到店」不可逆（no_show 是终态），提供 5 秒内可撤销，避免误点造成爽约记录
+    if (status === "no_show") {
+      toast.success(label, {
+        description: "如为误点，可在此撤销",
+        duration: 6000,
+        action: {
+          label: "撤销",
+          onClick: () => void undoNoShow(id),
+        },
+      });
+    } else {
+      toast.success(label);
+    }
+    void load();
+  };
+
+  /** 撤销「未到店」：改回「顾客到店」并让老板知晓（no_show 终态由 0015 开放恢复） */
+  const undoNoShow = async (id: string) => {
+    setAppointments((list) =>
+      list.map((a) => (a.appointment_id === id ? { ...a, status: "arrived" } : a))
     );
+    const { error } = await createClient().rpc("update_appointment_status", {
+      p_appointment_id: id,
+      p_status: "arrived",
+    });
+    if (error) {
+      toast.error("撤销失败", { description: error.message });
+      void load();
+      return;
+    }
+    toast.success("已撤销「未到店」，改回「顾客到店」");
     void load();
   };
 
@@ -282,21 +330,21 @@ export default function StaffPage() {
                         {canMark && (
                           <div className="flex flex-wrap gap-2">
                             {a.status === "confirmed" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={marking !== null}
-                                onClick={() => void mark(a.appointment_id, "arrived")}
-                              >
-                                {marking === `${a.appointment_id}:arrived` ? (
-                                  <Loader2 className="size-3.5 animate-spin" />
-                                ) : null}
-                                顾客到店
-                              </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={marking === `${a.appointment_id}:arrived`}
+                              onClick={() => void mark(a.appointment_id, "arrived")}
+                            >
+                              {marking === `${a.appointment_id}:arrived` ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : null}
+                              顾客到店
+                            </Button>
                             )}
                             <Button
                               size="sm"
-                              disabled={marking !== null}
+                              disabled={marking === `${a.appointment_id}:done`}
                               onClick={() => void mark(a.appointment_id, "done")}
                               className="bg-bronze-500 text-white hover:bg-bronze-600"
                             >
@@ -309,7 +357,7 @@ export default function StaffPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={marking !== null}
+                                disabled={marking === `${a.appointment_id}:no_show`}
                                 onClick={() => void mark(a.appointment_id, "no_show")}
                                 className="border-rose-200 text-rose-700 hover:bg-rose-50"
                               >

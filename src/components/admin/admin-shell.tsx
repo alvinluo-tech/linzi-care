@@ -25,6 +25,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { BrandMark } from "@/components/brand";
+import { NotificationBell } from "@/components/admin/notification-bell";
 import { usePendingCount } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { STORE_NAME } from "@/lib/constants";
@@ -69,6 +70,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </SheetContent>
           </Sheet>
           <span className="font-serif tracking-widest">林梓精养馆 · 管理端</span>
+          <div className="ml-auto">
+            <NotificationBell />
+          </div>
         </header>
 
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
@@ -100,6 +104,9 @@ function SideContent({ onNavigate }: { onNavigate?: () => void }) {
           <p className="text-[10px] tracking-[0.25em] text-bark-300">
             ADMIN CONSOLE
           </p>
+        </div>
+        <div className="ml-auto">
+          <NotificationBell />
         </div>
       </div>
 
