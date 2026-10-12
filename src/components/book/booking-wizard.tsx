@@ -101,29 +101,54 @@ export function BookingWizard() {
   }, [serviceId, staffId, date, slot, remark]);
 
   useEffect(() => {
+    let cancelled = false;
     const supabase = createClient();
+    const apply = <T,>(set: (v: T) => void) => ({ data, error }: { data: T | null; error: { message: string } | null }) => {
+      if (cancelled) return;
+      if (error) {
+        toast.error("加载可预约项目失败", { description: error.message });
+        return;
+      }
+      set((data ?? []) as T);
+    };
+
     q(() =>
       supabase.from("services").select("*").eq("is_active", true).order("sort_order")
-    ).then(({ data }) => setServices((data as Services[]) ?? []));
+    ).then(apply<Services[]>((v) => setServices(v)));
     q(() =>
       supabase.from("staff").select("*").eq("is_active", true).order("sort_order")
-    ).then(({ data }) => setStaffList((data as Staff[]) ?? []));
-    q(() => supabase.from("staff_services").select("*")).then(({ data }) =>
-      setStaffServices((data as StaffServices[]) ?? [])
+    ).then(apply<Staff[]>((v) => setStaffList(v)));
+    q(() => supabase.from("staff_services").select("*")).then(
+      apply<StaffServices[]>((v) => setStaffServices(v))
     );
 
     (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data: memberRow } = await q(() =>
-          supabase.from("members").select("*").eq("user_id", user.id).maybeSingle()
-        );
-        setMember((memberRow as Members) ?? null);
+      // 关键：getUser 抛错也必须落到 authChecked，否则第 4 步永久卡在「正在检查贵宾会籍状态」
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data: memberRow } = await q(() =>
+            supabase.from("members").select("*").eq("user_id", user.id).maybeSingle()
+          );
+          if (!cancelled) setMember((memberRow as Members) ?? null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setMember(null);
+          toast.error("无法确认登录状态", {
+            description: e instanceof Error ? e.message : "网络异常",
+          });
+        }
+      } finally {
+        if (!cancelled) setAuthChecked(true);
       }
-      setAuthChecked(true);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const service = useMemo(
@@ -153,6 +178,7 @@ export function BookingWizard() {
 
   useEffect(() => {
     if (!serviceId || !staffId || !date) return;
+    let cancelled = false;
     setSlotsLoading(true);
     setSlots(null);
     q(() =>
@@ -161,15 +187,30 @@ export function BookingWizard() {
         p_service_id: serviceId,
         p_date: date,
       })
-    ).then(({ data, error }) => {
-      if (error) {
-        toast.error("获取可约时段失败", { description: error.message });
+    )
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          toast.error("获取可约时段失败", { description: error.message });
+          setSlots([]);
+        } else {
+          setSlots((data as { slot_start: string }[]).map((r) => r.slot_start));
+        }
+        setSlotsLoading(false);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        toast.error("获取可约时段失败", {
+          description: e instanceof Error ? e.message : "网络异常",
+        });
         setSlots([]);
-      } else {
-        setSlots((data as { slot_start: string }[]).map((r) => r.slot_start));
-      }
-      setSlotsLoading(false);
-    });
+        setSlotsLoading(false);
+      });
+
+    // 乱序守卫：快速切换技师/日期时，旧响应不得覆盖新选择的时段列表
+    return () => {
+      cancelled = true;
+    };
   }, [serviceId, staffId, date]);
 
   const selectService = (id: string) => {

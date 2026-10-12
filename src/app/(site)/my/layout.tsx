@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { PageLoader } from "@/components/brand";
 import { getCurrentSession } from "@/lib/auth-server";
+import { ServiceUnavailable } from "@/components/service-unavailable";
 
 export default function MyLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,7 +15,9 @@ export default function MyLayout({ children }: { children: React.ReactNode }) {
 
 async function MyGuard({ children }: { children: React.ReactNode }) {
   await connection();
-  const { role } = await getCurrentSession();
+  const session = await getCurrentSession();
+  if (session.status === "unavailable") return <ServiceUnavailable retryHref="/my" />;
+  const { role } = session;
   if (!role) redirect("/login?next=/my");
   if (role === "admin") redirect("/admin");
   if (role === "staff") redirect("/staff");

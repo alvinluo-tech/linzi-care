@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ScheduleXCalendar, useCalendarApp } from "@schedule-x/react";
 import {
   createViewWeek,
@@ -9,6 +9,8 @@ import {
   createViewMonthAgenda,
 } from "@schedule-x/calendar";
 import "@schedule-x/theme-default/dist/index.css";
+import { CALENDAR_END_HOUR, CALENDAR_START_HOUR } from "@/lib/constants";
+import { formatTime, storeDateKey } from "@/lib/format";
 import type { AppointmentWithRefs } from "@/lib/types";
 
 interface ScheduleCalendarProps {
@@ -70,14 +72,9 @@ const CALENDARS_CONFIG = {
 };
 
 function formatToScheduleXTime(isoString: string): string {
-  const d = new Date(isoString);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const year = d.getFullYear();
-  const month = pad(d.getMonth() + 1);
-  const day = pad(d.getDate());
-  const hours = pad(d.getHours());
-  const minutes = pad(d.getMinutes());
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
+  // 必须按店铺时区拆：Schedule-X 用「墙上时钟字符串」定位事件格子，
+  // 用浏览器本地 getHours() 会让非 +08:00 的老板把 CST 10:00 的单子画到前一天 19:00。
+  return `${storeDateKey(isoString)} ${formatTime(isoString)}`;
 }
 
 export function ScheduleCalendar({
@@ -90,6 +87,17 @@ export function ScheduleCalendar({
     appointments.forEach((a) => map.set(a.id, a));
     return map;
   }, [appointments]);
+
+  // useCalendarApp 只在挂载那一刻消费 config（@schedule-x/react 内部是 useEffect(..., [])），
+  // 回调必须经 ref 读最新数据，否则点击「挂载之后才出现的事件」会静默无响应。
+  const mapRef = useRef(appointmentsMap);
+  const selectRef = useRef(onSelectAppointment);
+  useEffect(() => {
+    mapRef.current = appointmentsMap;
+  }, [appointmentsMap]);
+  useEffect(() => {
+    selectRef.current = onSelectAppointment;
+  }, [onSelectAppointment]);
 
   const sxEvents = useMemo(() => {
     const filtered =
@@ -124,8 +132,8 @@ export function ScheduleCalendar({
     defaultView: "week",
     locale: "zh-CN",
     dayBoundaries: {
-      start: "09:00",
-      end: "22:00",
+      start: `${String(CALENDAR_START_HOUR).padStart(2, "0")}:00`,
+      end: `${String(CALENDAR_END_HOUR).padStart(2, "0")}:00`,
     },
     weekOptions: {
       gridHeight: 480, // 精致收紧，一屏纵览
@@ -134,9 +142,9 @@ export function ScheduleCalendar({
     calendars: CALENDARS_CONFIG,
     callbacks: {
       onEventClick(calendarEvent) {
-        const apt = appointmentsMap.get(String(calendarEvent.id));
+        const apt = mapRef.current.get(String(calendarEvent.id));
         if (apt) {
-          onSelectAppointment(apt);
+          selectRef.current(apt);
         }
       },
     },

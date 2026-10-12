@@ -18,7 +18,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
+import { q } from "@/lib/supabase/query";
 import { roleHome, STORE_NAME } from "@/lib/constants";
+import type { Role } from "@/lib/constants";
+
+/**
+ * 只接受站内路径：`//evil.com` 与 `/\\evil.com` 都会被浏览器当成跨域目标，
+ * 直接放行等于开放重定向。
+ */
+function safeNextTarget(raw: string | null): string | null {
+  if (!raw || raw.length < 2) return null;
+  if (!raw.startsWith("/")) return null;
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return null;
+  return raw;
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -48,21 +61,30 @@ export function LoginForm() {
       return;
     }
 
-    const { data: rolesData } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.user.id);
+    const { data: rolesData, error: rolesError } = await q(() =>
+      supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id)
+    );
+
+    if (rolesError) {
+      // 角色读不出来不等于「是顾客」：那样会把老板落到会员区
+      setSubmitting(false);
+      toast.error("已登录，但暂时无法确认你的身份权限", {
+        description: rolesError.message,
+      });
+      return;
+    }
 
     const roles = (rolesData ?? []).map((r) => r.role as string);
-    const role = roles.includes("admin")
+    const role: Role = roles.includes("admin")
       ? "admin"
       : roles.includes("staff")
         ? "staff"
         : "customer";
 
-    const next = searchParams.get("next");
-    router.replace(next && next.startsWith("/") ? next : roleHome(role));
-    router.refresh();
+    router.replace(safeNextTarget(searchParams.get("next")) ?? roleHome(role));
   };
 
   return (

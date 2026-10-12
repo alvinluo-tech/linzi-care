@@ -38,7 +38,6 @@ export function SiteHeader() {
     await createClient().auth.signOut();
     setMobileOpen(false);
     router.push("/");
-    router.refresh();
   };
 
   const nav = (

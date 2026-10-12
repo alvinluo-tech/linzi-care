@@ -249,9 +249,8 @@
 .schedule-x-theme-linzi .sx__calendar-wrapper,
 .schedule-x-theme-linzi .sx__view-container,
 .schedule-x-theme-linzi .sx__week-grid,
-.schedule-x-theme-linzi .sx__time-grid,
 .schedule-x-theme-linzi .sx__date-grid,
-.schedule-x-theme-linzi .sx__month-grid,
+.schedule-x-theme-linzi .sx__month-grid-wrapper,
 .schedule-x-theme-linzi .sx__month-grid-day {
   background-color: #faf7f1 !important;
 }
@@ -332,7 +331,7 @@
 
 /* 星期与日期表头：深棕衬线与金铜今日高亮 */
 .schedule-x-theme-linzi .sx__week-grid__date,
-.schedule-x-theme-linzi .sx__week-day-name {
+.schedule-x-theme-linzi .sx__week-grid__day-name {
   color: #7e6350 !important;
   font-family: var(--font-serif);
 }
@@ -343,11 +342,10 @@
 }
 
 /* 时间轴与刻度线：温润细线，去除生硬冷灰 */
-.schedule-x-theme-linzi .sx__time-grid-day-line,
-.schedule-x-theme-linzi .sx__time-grid-day-hour {
+.schedule-x-theme-linzi .sx__week-grid__hour {
   border-color: #ede4d6 !important;
 }
-.schedule-x-theme-linzi .sx__time-grid-day-axis-label {
+.schedule-x-theme-linzi .sx__week-grid__hour-text {
   color: #a98f7b !important;
   font-size: 11px !important;
   font-family: var(--font-mono);
