@@ -136,6 +136,11 @@ export interface Database {
           end_time: string;
           status: string;
           remark: string | null;
+          price_snapshot: number | null;
+          member_price_snapshot: number | null;
+          pass_id: string | null;
+          charged_amount: number;
+          payment_state: "charged" | "refunded" | "redeemed" | "legacy";
           created_at: string;
           updated_at: string;
         },
@@ -215,6 +220,31 @@ export interface Database {
         created_at: string;
         updated_at: string;
       }>;
+      service_passes: Table<{
+        id: string;
+        member_id: string;
+        service_id: string;
+        title: string;
+        source: "gift" | "purchase" | "adjust";
+        status: "active" | "held" | "redeemed" | "expired" | "revoked";
+        expires_at: string | null;
+        granted_by: string | null;
+        remark: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+
+      pass_ledger: Table<{
+        id: string;
+        pass_id: string;
+        member_id: string;
+        old_status: string | null;
+        new_status: string;
+        reason: string;
+        operator_id: string | null;
+        created_at: string;
+      }>;
+
     };
     Views: Record<string, never>;
     Functions: {
@@ -226,11 +256,27 @@ export interface Database {
           p_start_time: string;
           p_remark?: string;
           p_status?: string;
+          p_pass_id?: string;
         };
         Returns: string;
       };
       cancel_appointment: {
         Args: { p_appointment_id: string };
+        Returns: undefined;
+      };
+      grant_service_pass: {
+        Args: {
+          p_member_id: string;
+          p_service_id: string;
+          p_quantity?: number;
+          p_source?: string;
+          p_months?: number;
+          p_remark?: string;
+        };
+        Returns: number;
+      };
+      revoke_service_pass: {
+        Args: { p_pass_id: string; p_reason?: string };
         Returns: undefined;
       };
       update_appointment_status: {
