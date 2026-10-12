@@ -44,3 +44,15 @@ export async function q<R extends { data: unknown; error: { message: string } | 
 }
 
 export type TypedClient = SupabaseClient<Database>;
+
+/**
+ * 写操作执行器：**绝不重试**。
+ * PostgREST 的 insert/update/delete 与 RPC 副作用都不幂等——请求已提交但响应在网络层
+ * 丢失时，重放会产生重复业务行或重复 balance_logs 账本行。这类失败应直接回传给用户，
+ * 由用户决定是否再点一次。
+ */
+export async function mutate<
+  R extends { data: unknown; error: { message: string } | null },
+>(build: () => PromiseLike<R>): Promise<R> {
+  return await build();
+}

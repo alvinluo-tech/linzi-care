@@ -1,5 +1,61 @@
+import { combineStoreDateTime, STORE_TIMEZONE } from "@/lib/constants";
+
+// format.ts 是日期/时刻的门面：调用方不应为了拼一个东八区时间再去 import constants
+export { combineStoreDateTime };
+
 const pad = (n: number) => String(n).padStart(2, "0");
 
+/**
+ * 第一性原理：这家店只有一个营业时区（Asia/Shanghai），而预约时刻在库里是 UTC timestamptz。
+ * 若用访客浏览器本地时区来拆「日期」和「钟点」，非 +08:00 的顾客会把 CST 上午 10:00
+ * 看成自己所在时区的前一天 19:00——时段列表、日营收分桶、"今日客次"全都会错位。
+ * 因此所有面向用户的时刻渲染一律锚定店铺时区，与浏览器时区无关。
+ */
+const storePartsFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: STORE_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  // 必须显式 h23：只写 hour12:false 时，部分 ICU 版本会把 00:00 渲染成 "24"
+  hourCycle: "h23",
+});
+
+function storeParts(value: string | number | Date) {
+  const d = value instanceof Date ? value : new Date(value);
+  const out: Record<string, string> = {};
+  for (const p of storePartsFormatter.formatToParts(d)) {
+    if (p.type !== "literal") out[p.type] = p.value;
+  }
+  return out;
+}
+
+/** 某个时刻在店铺时区的日历日 `YYYY-MM-DD`（用于分桶与查询区间） */
+export function storeDateKey(value: string | number | Date): string {
+  const p = storeParts(value);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/** 店铺时区某一天的 [00:00, 次日00:00) 对应的 UTC ISO 区间 */
+export function storeDayBounds(
+  value: string | number | Date
+): { startIso: string; endIso: string } {
+  const key = storeDateKey(value);
+  // 用 UTC 日算术推进一天，setUTCDate 会自动处理月末溢出（10-31 → 11-01）
+  const next = new Date(`${key}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const nextKey = next.toISOString().slice(0, 10);
+  return {
+    startIso: combineStoreDateTime(key, "00:00"),
+    endIso: combineStoreDateTime(nextKey, "00:00"),
+  };
+}
+
+/**
+ * 从「日期字面量」取 `YYYY-MM-DD`（用于日期选择器里那些只代表某一天的 Date 对象）。
+ * 注意：处理真实时刻请用 storeDateKey，不要用这个。
+ */
 export function dateKey(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
@@ -33,14 +89,33 @@ export function formatMD(d: Date): string {
 
 export function formatTime(iso?: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const p = storeParts(iso);
+  return `${p.hour}:${p.minute}`;
 }
 
 export function formatDateTime(iso?: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  return `${dateKey(d)} ${formatTime(iso)}`;
+  return `${storeDateKey(iso)} ${formatTime(iso)}`;
+}
+
+/**
+ * 由「日期字面量」（日期选择器里那种只代表某一天的 Date）直接得到店铺时区当天 00:00 的
+ * UTC 瞬间。必须走 dateKey+字面拼接，不能先 new Date(key) 再 storeDateKey：
+ * 在 UTC+13/14 之类的浏览器里，本地午夜会落回前一天的 CST，从而整体错一天。
+ */
+export function storeDayBoundsFromLiteral(d: Date): { startIso: string; endIso: string } {
+  const key = dateKey(d);
+  const next = new Date(`${key}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return {
+    startIso: combineStoreDateTime(key, "00:00"),
+    endIso: combineStoreDateTime(next.toISOString().slice(0, 10), "00:00"),
+  };
+}
+
+/** 店铺时区的「星期几」标签（输入是时刻，不是日期字面量） */
+export function storeWeekdayLabel(value: string | number | Date): string {
+  return weekdayLabel(new Date(`${storeDateKey(value)}T12:00:00Z`));
 }
 
 export function formatCNY(v: string | number | null | undefined): string {
