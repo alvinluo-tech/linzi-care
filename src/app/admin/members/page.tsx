@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, History, Plus, UserPlus, Wallet } from "lucide-react";
+import { ArrowUpDown, History, Plus, Ticket, UserPlus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { DataTable } from "@/components/ui/data-table";
 import { AccountActions } from "@/components/admin/account-actions";
 import { CredentialsDialog } from "@/components/credentials-dialog";
+import { GrantPassDialog } from "@/components/admin/grant-pass-dialog";
 import { invokeFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
 import { mutate, q } from "@/lib/supabase/query";
@@ -49,6 +50,7 @@ export default function AdminMembersPage() {
 
   // 余额记录
   const [logsTarget, setLogsTarget] = useState<Members | null>(null);
+  const [passTarget, setPassTarget] = useState<Members | null>(null);
   const [logs, setLogs] = useState<BalanceLogs[] | null>(null);
   const logsReqRef = useRef(0);
 
@@ -283,6 +285,15 @@ export default function AdminMembersPage() {
                 onClick={() => void openLogs(m)}
               >
                 <History className="mr-1 size-3 text-bark-400" /> 变动流水
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-bark-600 hover:bg-secondary"
+                onClick={() => setPassTarget(m)}
+              >
+                <Ticket className="size-3" />
+                权益
               </Button>
               <Button
                 variant="ghost"
@@ -528,6 +539,12 @@ export default function AdminMembersPage() {
       </Dialog>
 
       {/* 余额变动记录 */}
+      <GrantPassDialog
+        member={passTarget}
+        open={Boolean(passTarget)}
+        onOpenChange={(o) => !o && setPassTarget(null)}
+      />
+
       <Dialog open={Boolean(logsTarget)} onOpenChange={(o) => !o && setLogsTarget(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
