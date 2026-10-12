@@ -1,5 +1,16 @@
 "use client";
 
+// 必须排在 @schedule-x 之前：Schedule-X 的日历事件内部按
+// `start instanceof Temporal.ZonedDateTime` 判断类型，并直接调用
+// `withTimeZone()`。浏览器已内置实验性 Temporal，其对象与 Schedule-X 期望的
+// 实例判定不一致（事件对象会被当成普通字符串/异物），于是周视图构建时抛
+// "this._start.withTimeZone is not a function"，整块时间网格渲染不出来 ——
+// 表现就是「顾客预约了，后台日历里却什么都没有」。
+// 先加载 polyfill 覆盖 globalThis.Temporal，并让事件用它的 ZonedDateTime 构造，
+// 才能保证 instanceof 判定与 withTimeZone 都成立。
+import "temporal-polyfill/global";
+import { Temporal } from "temporal-polyfill";
+
 import { useEffect, useMemo, useRef } from "react";
 import { ScheduleXCalendar, useCalendarApp } from "@schedule-x/react";
 import {
@@ -9,8 +20,7 @@ import {
   createViewMonthAgenda,
 } from "@schedule-x/calendar";
 import "@schedule-x/theme-default/dist/index.css";
-import { CALENDAR_END_HOUR, CALENDAR_START_HOUR } from "@/lib/constants";
-import { formatTime, storeDateKey } from "@/lib/format";
+import { CALENDAR_END_HOUR, CALENDAR_START_HOUR, STORE_TIMEZONE } from "@/lib/constants";
 import type { AppointmentWithRefs } from "@/lib/types";
 
 interface ScheduleCalendarProps {
@@ -71,10 +81,15 @@ const CALENDARS_CONFIG = {
   },
 };
 
-function formatToScheduleXTime(isoString: string): string {
-  // 必须按店铺时区拆：Schedule-X 用「墙上时钟字符串」定位事件格子，
-  // 用浏览器本地 getHours() 会让非 +08:00 的老板把 CST 10:00 的单子画到前一天 19:00。
-  return `${storeDateKey(isoString)} ${formatTime(isoString)}`;
+/**
+ * 把库里的 UTC 时刻转成 Schedule-X 需要的 Temporal.ZonedDateTime。
+ * 必须给出「店铺时区」的墙上时钟：Schedule-X 用它定位格子，
+ * 若用浏览器本地时区，非 +08:00 的设备会把 CST 10:00 画到前一天。
+ */
+function toScheduleXDateTime(isoString: string): Temporal.ZonedDateTime {
+  return Temporal.Instant.from(new Date(isoString).toISOString()).toZonedDateTimeISO(
+    STORE_TIMEZONE
+  );
 }
 
 export function ScheduleCalendar({
@@ -113,8 +128,8 @@ export function ScheduleCalendar({
       return {
         id: a.id,
         title: `${customerName} · ${serviceName} (${staffName})`,
-        start: formatToScheduleXTime(a.start_time),
-        end: formatToScheduleXTime(a.end_time),
+        start: toScheduleXDateTime(a.start_time),
+        end: toScheduleXDateTime(a.end_time),
         calendarId: a.status in CALENDARS_CONFIG ? a.status : "pending",
         people: [customerName, staffName],
         description: a.remark ?? undefined,
@@ -131,6 +146,9 @@ export function ScheduleCalendar({
     ],
     defaultView: "week",
     locale: "zh-CN",
+    // 必须显式指定：Schedule-X 默认 timezone = 'UTC'，会让所有事件按 UTC 渲染
+    // （CST 10:30 的单子显示成 02:30）。锚定店铺时区才能与门店作息一致。
+    timezone: STORE_TIMEZONE,
     dayBoundaries: {
       start: `${String(CALENDAR_START_HOUR).padStart(2, "0")}:00`,
       end: `${String(CALENDAR_END_HOUR).padStart(2, "0")}:00`,
