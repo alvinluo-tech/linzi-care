@@ -1,4 +1,9 @@
 import { defineConfig } from "@playwright/test";
+import { loadEnv } from "./tests/load-env";
+import { PROXY, SITE } from "./tests/test-env";
+
+// 凭据（service_role、账号口令）一律来自 .env.local；config 本身不含任何密钥
+loadEnv();
 
 /**
  * 真实点击级浏览器测试（Playwright + Chromium）
@@ -18,16 +23,16 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:3002",
+    baseURL: SITE,
     actionTimeout: 25_000,
     navigationTimeout: 120_000,
     trace: "retain-on-failure",
     permissions: ["notifications"],
     launchOptions: {
-      proxy: {
-        server: process.env.E2E_PROXY ?? "http://127.0.0.1:7897",
-        bypass: "localhost,127.0.0.1",
-      },
+      proxy:
+        PROXY === "direct"
+          ? undefined
+          : { server: PROXY, bypass: "localhost,127.0.0.1" },
     },
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],

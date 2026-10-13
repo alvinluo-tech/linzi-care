@@ -7,19 +7,18 @@
  */
 import { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import "../load-env";
 
-export const SUPABASE_URL = "https://bzjsbiafxxgljbdcreqf.supabase.co";
-export const ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6anNiaWFmeHhnbGpiZGNyZXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTAyNTYsImV4cCI6MjEwNzI4NjI1Nn0.qEUQLQnfxUTjuYKtq8vxkJSmF_5y_6v10m6BF_hfTD0";
-/** 本地 Next.js dev server */
-export const SITE = "http://localhost:3002";
+// 凭据一律来自环境变量（见 tests/test-env.ts）。此前硬编码在这里的
+// anon key 与三套账号口令已移除：口令轮换不该需要改代码，密钥更不该入库。
+export { SUPABASE_URL, ANON_KEY, SITE, CREDENTIALS } from "../test-env";
+import { ANON_KEY, CREDENTIALS, SITE, SUPABASE_URL, PROXY } from "../test-env";
 
 export const E2E_TAG = "E2E-TEST";
 
 // 网络出口：本机直连 Supabase 常被阻断，默认走本地代理（Clash 等监听 7897）。
 // 可用 E2E_PROXY=direct 强制直连，或 E2E_PROXY=http://host:port 指定其他代理。
 // localhost/127.0.0.1 一律直连，避免本机 dev server 请求被代理劫持（502）。
-const PROXY = process.env.E2E_PROXY ?? "http://127.0.0.1:7897";
 if (PROXY !== "direct") {
   setGlobalDispatcher(
     new EnvHttpProxyAgent({
@@ -29,12 +28,6 @@ if (PROXY !== "direct") {
     })
   );
 }
-
-export const CREDENTIALS = {
-  boss: { email: "admin@linzi.com", password: "LinziAdmin2026!#" },
-  staff: { email: "staff.lin@linzi.com", password: "StaffLin2026!#" },
-  member: { email: "vip.zhang@linzi.com", password: "VipZhang2026!#" },
-};
 
 export function makeClient(): SupabaseClient {
   return createClient(SUPABASE_URL, ANON_KEY, {

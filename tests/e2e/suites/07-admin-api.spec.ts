@@ -10,6 +10,7 @@
  * 非 admin 明文拒绝。
  */
 import { suite, expect, retry, CREDENTIALS, SITE } from "../setup";
+import { ANON_KEY, SUPABASE_URL } from "../../test-env";
 
 /** 用指定账号的会话访问本地管理端接口（cookie 形式，与浏览器一致） */
 async function adminApiAs(
@@ -61,7 +62,7 @@ async function loginBundle(
         headers: {
           "Content-Type": "application/json",
           apikey:
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6anNiaWFmeHhnbGpiZGNyZXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTAyNTYsImV4cCI6MjEwNzI4NjI1Nn0.qEUQLQnfxUTjuYKtq8vxkJSmF_5y_6v10m6BF_hfTD0",
+            ANON_KEY,
         },
         body: JSON.stringify({ email, password }),
       }

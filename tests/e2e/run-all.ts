@@ -2,8 +2,10 @@
  * 梓养云 · 端到端测试总入口
  * 运行：npm run test:e2e
  * 依赖：本地 dev server（默认 http://localhost:3002）+ 远程 Supabase 在线
+ *       凭据全部来自 .env.local（见 .env.example），源码不含任何密钥
  */
-import { runAll, type TestSuite } from "./setup";
+import "../load-env";
+import { runAll, type TestSuite, SITE } from "./setup";
 import { publicSpec } from "./suites/01-public.spec";
 import { authSpec } from "./suites/02-auth.spec";
 import { bookingSpec } from "./suites/03-booking.spec";
@@ -18,14 +20,26 @@ async function main() {
   console.log("║  梓养云 · 端到端测试（真实云端环境）      ║");
   console.log("╚══════════════════════════════════════════╝");
 
-  // 前置检查：dev server 必须在线
+  // 前置检查：站点必须在线。用 SITE 而非硬编码，便于换环境（staging）时复用
   try {
-    const ping = await fetch("http://localhost:3002/");
+    const ping = await fetch(`${SITE}/`);
     if (!ping.ok) throw new Error(`状态码 ${ping.status}`);
-    console.log("前置检查：dev server 在线 ✓");
+    console.log(`前置检查：站点在线 ✓ (${SITE})`);
   } catch (e) {
-    console.error("前置检查失败：本地 dev server (http://localhost:3002) 未响应，请先运行 npm run dev");
+    console.error(
+      `前置检查失败：站点 (${SITE}) 未响应。请先运行 npm run build && npx next start -p 3002`
+    );
     console.error(String(e));
+    process.exit(2);
+  }
+
+  // 提前暴露缺失的凭据（清晰报错，而不是跑一半才失败）
+  try {
+    const { CREDENTIALS, ANON_KEY } = await import("./setup");
+    if (!ANON_KEY || !CREDENTIALS.boss.email) throw new Error("凭据为空");
+  } catch (e) {
+    console.error("凭据检查失败：");
+    console.error(e instanceof Error ? e.message : String(e));
     process.exit(2);
   }
 
