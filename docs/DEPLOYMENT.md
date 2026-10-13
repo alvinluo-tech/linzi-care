@@ -84,10 +84,17 @@ npx supabase secrets set WEBHOOK_SERVICE_TOKEN=<数据库触发器内 Authorizat
    git commit -m "feat: implement pwa web push notification with supabase backend"
    git push origin main
    ```
-2. 在 Vercel 导入项目，配置 3 个环境变量：
-   - `NEXT_PUBLIC_SUPABASE_URL` = `https://bzjsbiafxxgljbdcreqf.supabase.co`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6anNiaWFmeHhnbGpiZGNyZXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTAyNTYsImV4cCI6MjEwNzI4NjI1Nn0.qEUQLQnfxUTjuYKtq8vxkJSmF_5y_6v10m6BF_hfTD0`
-   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` = `BFHMem0rZxvO7jgan4LOXIeKaR4UWAGStRDUKhXrD6xkniecuB3rVc7wNnFtBJcJ_fCK_PQ4nnk4R9s7rbMRw0w`
+2. 在 Vercel 导入项目，配置 3 个环境变量（值从 Supabase 控制台
+   Project Settings → API 复制，**不要从本文档或仓库里抄**）：
+   - `NEXT_PUBLIC_SUPABASE_URL` = 你的项目 URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = 你的 anon key
+   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` = 你的 VAPID 公钥（`npx web-push generate-vapid-keys`）
+
+   > 本文档原先直接写明了本项目生产的 URL / anon key / VAPID 公钥。
+   > 这些值已于 2026-10 从仓库移除：anon key 虽受 RLS 约束、危害有限，
+   > 但它配合 `auth/v1/signup` 等端点可被用来枚举项目、消耗配额，
+   > 且「生产凭据出现在公开文档里」本身就不该是常态。
+   > 仍建议按下面的「凭据轮换」章节轮换一次，把历史暴露彻底作废。
 3. 部署上线。
 
 ---
