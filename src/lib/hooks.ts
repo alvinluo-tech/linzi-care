@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { adminGet } from "@/lib/admin/client";
 import { q } from "@/lib/supabase/query";
 import { combineStoreDateTime, formatDateTime, formatTime, storeDateKey } from "@/lib/format";
 import type { Role } from "@/lib/constants";
@@ -111,14 +112,10 @@ export function usePendingCount(): number | null {
   const [count, setCount] = useState<number | null>(null);
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    const res = await q(() =>
-      supabase
-        .from("appointments")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending")
-    );
-    if (!res.error) setCount(res.count ?? 0);
+    // 走服务端 admin 身份：角标必须反映全店待确认数，不能被非 admin 会话
+    // 的 RLS 裁剪成 0（那会让老板以为没有待办）。
+    const res = await adminGet<{ count: number; error?: string }>("/pending-count");
+    if (!res.error) setCount(res.data?.count ?? 0);
   }, []);
 
   useEffect(() => {
@@ -197,8 +194,6 @@ export function useInbox(): InboxState {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-
     // 今日门店时区边界
     const now = new Date();
     const key = storeDateKey(now);
@@ -207,44 +202,25 @@ export function useInbox(): InboxState {
     const dayStartIso = combineStoreDateTime(key, "00:00");
     const dayEndIso = combineStoreDateTime(next.toISOString().slice(0, 10), "00:00");
 
-    const [pending, failed, todayArrive] = await Promise.all([
-      q(() =>
-        supabase
-          .from("appointments")
-          .select("id, created_at, start_time, members(name), services(name)")
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(20)
-      ),
-      q(() =>
-        supabase
-          .from("notifications")
-          .select("id, created_at, type, channel, appointment_id")
-          .eq("status", "failed")
-          .order("created_at", { ascending: false })
-          .limit(20)
-      ),
-      q(() =>
-        supabase
-          .from("appointments")
-          .select("id, start_time, status, members(name), services(name)")
-          .in("status", ["confirmed", "arrived"])
-          .gte("start_time", dayStartIso)
-          .lt("start_time", dayEndIso)
-          .order("start_time")
-          .limit(20)
-      ),
-    ]);
+    // 经服务端 admin 身份读取：待确认/今日客单都内嵌 members(name)，
+    // 客户端若持非 admin 会话会被 RLS 静默置空（显示成「会员」）。
+    const res = await adminGet<{
+      pending: InboxPendingRow[];
+      failedNotifications: InboxFailedRow[];
+      todayArrive: InboxTodayRow[];
+      error?: string;
+    }>("/inbox", { day_start: dayStartIso, day_end: dayEndIso });
 
-    // 任一查询失败就不更新（保留旧内容），避免把「查不到」显示成「没有待办」
-    if (pending.error || failed.error || todayArrive.error) {
+    // 查询失败就不更新（保留旧内容），避免把「查不到」显示成「没有待办」
+    if (res.error) {
       setLoading(false);
       return;
     }
 
+    const payload = res.data!;
     const list: InboxItem[] = [];
 
-    for (const a of (pending.data ?? []) as InboxPendingRow[]) {
+    for (const a of payload.pending ?? []) {
       list.push({
         id: `p-${a.id}`,
         kind: "pending",
@@ -257,7 +233,7 @@ export function useInbox(): InboxState {
       });
     }
 
-    for (const n of (failed.data ?? []) as InboxFailedRow[]) {
+    for (const n of payload.failedNotifications ?? []) {
       list.push({
         id: `f-${n.id}`,
         kind: "delivery_failed",
@@ -268,7 +244,7 @@ export function useInbox(): InboxState {
       });
     }
 
-    for (const a of (todayArrive.data ?? []) as InboxTodayRow[]) {
+    for (const a of payload.todayArrive ?? []) {
       list.push({
         id: `t-${a.id}`,
         kind: "arrive_today",

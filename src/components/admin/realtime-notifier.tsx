@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { adminGet } from "@/lib/admin/client";
 import { formatDateTime } from "@/lib/format";
 import { broadcastAppointmentsChanged } from "@/lib/hooks";
 
@@ -32,12 +33,13 @@ export function RealtimeNotifier() {
           const id = (payload.new as { id?: string }).id;
           let description = "请刷新页面查看详情";
           if (id) {
-            const { data } = await supabase
-              .from("appointments")
-              .select("start_time, members(name), staff(name), services(name)")
-              .eq("id", id)
-              .maybeSingle();
-            const row = data as NewAppointmentPayload | null;
+            // 经服务端 admin 身份取详情：客户端会话若不是 admin，
+            // members(name) 关联会被 RLS 静默置空，提示就变成「会员」。
+            const res = await adminGet<{ appointment: NewAppointmentPayload | null }>(
+              "/appointment",
+              { id }
+            );
+            const row = res.data?.appointment ?? null;
             if (row) {
               description = `${row.members?.name ?? "会员"} 预约了 ${
                 row.services?.name ?? "项目"

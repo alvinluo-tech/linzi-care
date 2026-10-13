@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/client";
-import { q } from "@/lib/supabase/query";
+import { adminGet } from "@/lib/admin/client";
 import {
   addDays,
   formatMD,
@@ -66,31 +66,36 @@ export default function AdminSchedulePage() {
   }, []);
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    // 先加载技师列表（含未选择技师时的默认选中），再按需加载该周排班
-    const staffRes = await q(() =>
-      supabase.from("staff").select("*").order("sort_order")
-    );
-    const staff = (staffRes.data as Staff[]) ?? [];
-    setStaffList(staff);
+    // 先加载技师列表（含未选择技师时的默认选中），再按需加载该周排班。
+    // 经服务端以核验过的 admin 身份读取，避免客户端非 admin 会话下被 RLS 裁剪。
+    const rangeFrom =
+      weekStart && weekEnd ? storeDayBoundsFromLiteral(weekStart).startIso : undefined;
+    const rangeTo =
+      weekStart && weekEnd ? storeDayBoundsFromLiteral(weekEnd).startIso : undefined;
 
-    const activeId = staffId || staff[0]?.id || "";
-    if (activeId && !staffId && staff.length > 0) setStaffId(staff[0].id);
-    if (!activeId || !weekStart || !weekEnd) {
+    const res = await adminGet<{
+      staff: Staff[];
+      schedules: Schedules[];
+      error?: string;
+    }>("/schedules", {
+      staff_id: staffId || undefined,
+      from: rangeFrom,
+      to: rangeTo,
+    });
+
+    if (res.error) {
+      toast.error("排班数据加载失败", { description: res.error.message });
       setSchedules([]);
       return;
     }
 
-    const scheduleRes = await q(() =>
-      supabase
-        .from("schedules")
-        .select("*")
-        .eq("staff_id", activeId)
-        .gte("start_time", storeDayBoundsFromLiteral(weekStart).startIso)
-        .lt("start_time", storeDayBoundsFromLiteral(weekEnd).startIso)
-        .order("start_time")
-    );
-    setSchedules((scheduleRes.data as Schedules[]) ?? []);
+    const staff = res.data?.staff ?? [];
+    setStaffList(staff);
+
+    const activeId = staffId || staff[0]?.id || "";
+    if (activeId && !staffId && staff.length > 0) setStaffId(staff[0].id);
+    // 未选定技师/周区间时接口不会返回排班，保持空列表
+    setSchedules(activeId && weekStart && weekEnd ? res.data?.schedules ?? [] : []);
   }, [staffId, weekStart, weekEnd]);
 
   useEffect(() => {

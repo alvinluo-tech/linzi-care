@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { CalendarPlus, Filter, CalendarCheck, Sparkles } from "lucide-react";
+import { CalendarPlus, Filter, CalendarCheck, Sparkles, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -16,6 +16,7 @@ import { AppointmentDialog } from "@/components/admin/appointment-dialog";
 import { NewAppointmentDialog } from "@/components/admin/new-appointment-dialog";
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
+import { adminGet, redirectToLoginIfUnauthorized } from "@/lib/admin/client";
 import { q } from "@/lib/supabase/query";
 import { addDays, storeDayBounds } from "@/lib/format";
 import type { AppointmentWithRefs, Staff } from "@/lib/types";
@@ -44,6 +45,7 @@ export default function AdminCalendarPage() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [staffFilter, setStaffFilter] = useState("all");
   const [appointments, setAppointments] = useState<AppointmentWithRefs[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<AppointmentWithRefs | null>(null);
   const [newOpen, setNewOpen] = useState(false);
@@ -56,22 +58,26 @@ export default function AdminCalendarPage() {
     const rangeStartIso = storeDayBounds(addDays(new Date(), -30)).startIso;
     const rangeEndIso = storeDayBounds(addDays(new Date(), 60)).startIso;
 
+    // 预约数据经服务端以核验过的 admin 身份读取：客户端会话若不是 admin，
+    // members 内嵌关联会被 RLS 静默置空（表现为「匿名客户」）。
     const [aptRes, staffRes] = await Promise.all([
-      q(() =>
-        supabase
-          .from("appointments")
-          .select(
-            "*, members(id, name, phone), staff(id, name, title), services(id, name, duration, price)"
-          )
-          .gte("start_time", rangeStartIso)
-          .lt("start_time", rangeEndIso)
-          .order("start_time")
+      adminGet<{ appointments: AppointmentWithRefs[]; error?: string }>(
+        "/appointments",
+        { from: rangeStartIso, to: rangeEndIso }
       ),
       q(() =>
         supabase.from("staff").select("*").eq("is_active", true).order("sort_order")
       ),
     ]);
-    setAppointments((aptRes.data as unknown as AppointmentWithRefs[]) ?? []);
+    if (aptRes.error) {
+      // 401 是登录态失效，直接送登录页；其余错误就地提示
+      if (redirectToLoginIfUnauthorized(aptRes.error)) return;
+      setLoadError(aptRes.error.message);
+      setAppointments([]);
+    } else {
+      setLoadError(null);
+      setAppointments(aptRes.data?.appointments ?? []);
+    }
     setStaffList((staffRes.data as Staff[]) ?? []);
   }, []);
 
@@ -125,6 +131,17 @@ export default function AdminCalendarPage() {
           </Button>
         </div>
       </div>
+
+      {/* 取数失败必须显式告知：否则会把「读不到」当成「没有预约」 */}
+      {loadError && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50/70 px-4 py-3 text-xs text-rose-800">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <p className="font-medium">预约数据加载失败</p>
+            <p className="mt-0.5 text-rose-700/90">{loadError}</p>
+          </div>
+        </div>
+      )}
 
       {/* Schedule-X 现代日历核心视图 */}
       {appointments === null ? (

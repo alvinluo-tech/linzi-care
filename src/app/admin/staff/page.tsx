@@ -23,7 +23,8 @@ import { AccountActions } from "@/components/admin/account-actions";
 import { CredentialsDialog } from "@/components/credentials-dialog";
 import { invokeFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
-import { mutate, q } from "@/lib/supabase/query";
+import { adminGet } from "@/lib/admin/client";
+import { mutate } from "@/lib/supabase/query";
 import { cn } from "@/lib/utils";
 import type { Profiles, Staff } from "@/lib/types";
 
@@ -47,15 +48,19 @@ export default function AdminStaffPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", title: "", bio: "" });
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    const [staffRes, profilesRes] = await Promise.all([
-      q(() => supabase.from("staff").select("*").order("sort_order")),
-      q(() => supabase.from("profiles").select("id, phone, email")),
-    ]);
-    const profiles =
-      (profilesRes.data as Pick<Profiles, "id" | "phone" | "email">[]) ?? [];
+    const res = await adminGet<{
+      staff: Staff[];
+      profiles: Pick<Profiles, "id" | "phone" | "email">[];
+      error?: string;
+    }>("/staff");
+    if (res.error) {
+      toast.error("员工档案加载失败", { description: res.error.message });
+      setRows([]);
+      return;
+    }
+    const profiles = res.data?.profiles ?? [];
     setRows(
-      ((staffRes.data as Staff[]) ?? []).map((s) => ({
+      (res.data?.staff ?? []).map((s) => ({
         ...s,
         profile: profiles.find((p) => p.id === s.user_id) ?? null,
       }))

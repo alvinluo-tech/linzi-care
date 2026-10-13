@@ -21,7 +21,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable } from "@/components/ui/data-table";
 import { createClient } from "@/lib/supabase/client";
-import { mutate, q } from "@/lib/supabase/query";
+import { adminGet } from "@/lib/admin/client";
+import { mutate } from "@/lib/supabase/query";
 import { formatCNY, formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Services, Staff, StaffServices } from "@/lib/types";
@@ -61,15 +62,22 @@ export default function AdminServicesPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    const [servicesRes, staffRes, linksRes] = await Promise.all([
-      q(() => supabase.from("services").select("*").order("sort_order")),
-      q(() => supabase.from("staff").select("*").order("sort_order")),
-      q(() => supabase.from("staff_services").select("*")),
-    ]);
-    setServices((servicesRes.data as Services[]) ?? []);
-    setStaffList((staffRes.data as Staff[]) ?? []);
-    setLinks((linksRes.data as StaffServices[]) ?? []);
+    const res = await adminGet<{
+      services: Services[];
+      staff: Staff[];
+      staff_services: StaffServices[];
+      error?: string;
+    }>("/services");
+    if (res.error) {
+      toast.error("服务项目加载失败", { description: res.error.message });
+      setServices([]);
+      setStaffList([]);
+      setLinks([]);
+      return;
+    }
+    setServices(res.data?.services ?? []);
+    setStaffList(res.data?.staff ?? []);
+    setLinks(res.data?.staff_services ?? []);
   }, []);
 
   useEffect(() => {

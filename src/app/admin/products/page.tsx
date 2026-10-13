@@ -20,7 +20,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DataTable } from "@/components/ui/data-table";
 import { createClient } from "@/lib/supabase/client";
-import { mutate, q } from "@/lib/supabase/query";
+import { adminGet } from "@/lib/admin/client";
+import { mutate } from "@/lib/supabase/query";
 import { formatCNY, STOCK_STATUS_META } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ProductCategories, ProductWithCategory } from "@/lib/types";
@@ -59,18 +60,19 @@ export default function AdminProductsPage() {
   const [selectedCatId, setSelectedCatId] = useState<string>("all");
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    const [productsRes, categoriesRes] = await Promise.all([
-      q(() =>
-        supabase
-          .from("products")
-          .select("*, product_categories(id, name)")
-          .order("sort_order")
-      ),
-      q(() => supabase.from("product_categories").select("*").order("sort_order")),
-    ]);
-    setProducts((productsRes.data as unknown as ProductWithCategory[]) ?? []);
-    setCategories((categoriesRes.data as ProductCategories[]) ?? []);
+    const res = await adminGet<{
+      products: ProductWithCategory[];
+      categories: ProductCategories[];
+      error?: string;
+    }>("/products");
+    if (res.error) {
+      toast.error("商品数据加载失败", { description: res.error.message });
+      setProducts([]);
+      setCategories([]);
+      return;
+    }
+    setProducts(res.data?.products ?? []);
+    setCategories(res.data?.categories ?? []);
   }, []);
 
   useEffect(() => {

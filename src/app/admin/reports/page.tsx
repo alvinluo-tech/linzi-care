@@ -28,8 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppointmentsChanged } from "@/lib/hooks";
-import { createClient } from "@/lib/supabase/client";
-import { q } from "@/lib/supabase/query";
+import { adminGet } from "@/lib/admin/client";
 import {
   combineStoreDateTime,
   formatCNY,
@@ -95,7 +94,6 @@ export default function AdminReportsPage() {
 
   const load = useCallback(async () => {
     if (!from || !to) return;
-    const supabase = createClient();
     // 严格按店铺东八区营业时间边界生成查询区间 [YYYY-MM-DD 00:00:00+08:00, YYYY-MM-DD 23:59:59.999+08:00]
     const startIso = combineStoreDateTime(from, "00:00");
     // 次日 00:00 之前（等价于当日 24:00）
@@ -103,40 +101,34 @@ export default function AdminReportsPage() {
     nextDate.setUTCDate(nextDate.getUTCDate() + 1);
     const endIso = combineStoreDateTime(nextDate.toISOString().slice(0, 10), "00:00");
 
-    const [aptRes, servicesRes, staffRes, membersRes] = await Promise.all([
-      q(() =>
-        supabase
-          .from("appointments")
-          .select(
-            "*, price_snapshot, member_price_snapshot, services(name, price, member_price)"
-          )
-          .gte("start_time", startIso)
-          .lt("start_time", endIso)
-          .order("start_time")
-          .limit(5000)
-      ),
-      // 只取报表真正用到的列：原先三张表都是 select("*")，
-      // 会把会员的手机号/备注等与报表无关的字段整表拉到浏览器
-      q(() => supabase.from("services").select("id, name, price, member_price")),
-      q(() => supabase.from("staff").select("id, name")),
-      q(() => supabase.from("members").select("id, created_at, balance")),
-    ]);
+    // 报表经服务端以核验过的 admin 身份读取，避免客户端非 admin 会话下
+    // 关联与统计被 RLS 静默裁剪。
+    const res = await adminGet<{
+      appointments: ReportData["appointments"];
+      services: Services[];
+      staff: Staff[];
+      members: Members[];
+      error?: string;
+    }>("/reports", { from: startIso, to: endIso });
 
     // 任一查询失败都不能把「查不出来」渲染成「本店零营收」：
-    // q() 重试耗尽后返回 error + data=null，继续走 ?? [] 会安静地显示空报表。
-    const failed = [aptRes, servicesRes, staffRes, membersRes].find((r) => r.error);
-    if (failed) {
-      setLoadError(failed.error?.message ?? "数据加载失败");
-      return; // 保留上一次的 data，不清空成空报表
+    // 失败时保留上一次的 data，不清空成空报表。
+    if (res.error) {
+      setLoadError(res.error.message);
+      return;
     }
     setLoadError(null);
 
+    const payload = res.data;
+    if (!payload) {
+      setLoadError("服务端返回了空响应，请刷新重试");
+      return;
+    }
     setData({
-      appointments:
-        (aptRes.data as ReportData["appointments"]) ?? [],
-      services: (servicesRes.data as Services[]) ?? [],
-      staff: (staffRes.data as Staff[]) ?? [],
-      members: (membersRes.data as Members[]) ?? [],
+      appointments: payload.appointments ?? [],
+      services: payload.services ?? [],
+      staff: payload.staff ?? [],
+      members: payload.members ?? [],
     });
   }, [from, to]);
 

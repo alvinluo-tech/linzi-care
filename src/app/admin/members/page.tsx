@@ -23,7 +23,8 @@ import { CredentialsDialog } from "@/components/credentials-dialog";
 import { GrantPassDialog } from "@/components/admin/grant-pass-dialog";
 import { invokeFunction } from "@/lib/functions";
 import { createClient } from "@/lib/supabase/client";
-import { mutate, q } from "@/lib/supabase/query";
+import { adminGet } from "@/lib/admin/client";
+import { mutate } from "@/lib/supabase/query";
 import { formatCNY, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BalanceLogs, Members } from "@/lib/types";
@@ -63,13 +64,13 @@ export default function AdminMembersPage() {
   });
 
   const load = useCallback(async () => {
-    const { data } = await q(() =>
-      createClient()
-        .from("members")
-        .select("*")
-        .order("created_at", { ascending: false })
-    );
-    setRows((data as Members[]) ?? []);
+    const res = await adminGet<{ members: Members[]; error?: string }>("/members");
+    if (res.error) {
+      toast.error("会员名籍加载失败", { description: res.error.message });
+      setRows([]);
+      return;
+    }
+    setRows(res.data?.members ?? []);
   }, []);
 
   useEffect(() => {
@@ -130,32 +131,30 @@ export default function AdminMembersPage() {
       toast.error("调整失败", { description: error.message });
       return;
     }
+    // 必须等刷新完成再关弹窗：余额调整是「改了钱就要看见新数字」的操作，
+    // 先关窗再异步取数会让用户（和自动化测试）读到上一轮的旧余额。
+    await load();
     toast.success("余额已更新，变动已记录");
     setBalanceTarget(null);
     setBalanceAmount("");
-    void load();
   };
 
   const openLogs = async (member: Members) => {
     const req = ++logsReqRef.current;
     setLogsTarget(member);
     setLogs(null);
-    const { data, error } = await q(() =>
-      createClient()
-        .from("balance_logs")
-        .select("*")
-        .eq("member_id", member.id)
-        .order("created_at", { ascending: false })
-        .limit(30)
+    const res = await adminGet<{ logs: BalanceLogs[]; error?: string }>(
+      "/balance-logs",
+      { member_id: member.id, limit: "30" }
     );
     // 乱序守卫：连点两行时，先点击那一条的响应不得覆盖后打开的弹窗
     if (req !== logsReqRef.current) return;
-    if (error) {
-      toast.error("余额流水加载失败", { description: error.message });
+    if (res.error) {
+      toast.error("余额流水加载失败", { description: res.error.message });
       setLogs([]);
       return;
     }
-    setLogs((data as BalanceLogs[]) ?? []);
+    setLogs(res.data?.logs ?? []);
   };
 
   const saveEdit = async () => {

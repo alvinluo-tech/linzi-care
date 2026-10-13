@@ -10,6 +10,7 @@ import { bookingSpec } from "./suites/03-booking.spec";
 import { confirmSpec } from "./suites/04-confirm.spec";
 import { staffSpec } from "./suites/05-staff.spec";
 import { balanceSpec } from "./suites/06-balance.spec";
+import { adminApiSuite } from "./suites/07-admin-api.spec";
 import { cleanupSpec } from "./suites/99-cleanup.spec";
 
 async function main() {
@@ -35,6 +36,7 @@ async function main() {
     confirmSpec,
     staffSpec,
     balanceSpec,
+    adminApiSuite,
     cleanupSpec,
   ];
 
