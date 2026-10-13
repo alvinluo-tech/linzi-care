@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+/* shadcn CLI 提供的 Tailwind v4 工具类（data-open / data-closed 变体、
+   no-scrollbar、scroll-fade、shimmer 等）。原先从 node_modules 里的
+   `shadcn/tailwind.css` 引入，意味着那个包是构建期必需依赖 —— 而它在
+   npm audit 里挂着一串 high 漏洞，且我们只用到这一个 CSS 文件。
+   现已把它 vendor 到本目录（内容原样，见文件头注释），从而彻底移除该依赖。 */
+@import "./shadcn-vendor.css";
 
 @custom-variant dark (&:is(.dark *));
 
