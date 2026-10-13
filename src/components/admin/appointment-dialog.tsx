@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/status-badge";
 import { createClient } from "@/lib/supabase/client";
 import { broadcastAppointmentsChanged } from "@/lib/hooks";
-import { formatCNY, formatDateTime, formatDuration, formatTime } from "@/lib/format";
+import { formatCNY, formatDateTime, formatDuration, formatTime, bookedPrice } from "@/lib/format";
 import type { AppointmentWithRefs } from "@/lib/types";
 
 interface AppointmentDialogProps {
@@ -110,7 +110,7 @@ export function AppointmentDialog({
           />
           <Row
             label="时长 / 价格"
-            value={`${formatDuration(appointment.services?.duration ?? 0)} · ${formatCNY(appointment.services?.price ?? 0)}`}
+            value={`${formatDuration(appointment.services?.duration ?? 0)} · ${formatCNY(bookedPrice(appointment))}`}
           />
           {appointment.remark && <Row label="备注" value={appointment.remark} />}
         </dl>

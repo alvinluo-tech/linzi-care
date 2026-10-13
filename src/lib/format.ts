@@ -168,6 +168,29 @@ export function formatCNY(v: string | number | null | undefined): string {
   return `¥${Number.isInteger(n) ? n : n.toFixed(2)}`;
 }
 
+/**
+ * 单笔预约的成交价口径（全站唯一来源）。
+ *
+ * 优先级：会员价快照 → 门市价快照 → 服务当前会员价 → 服务当前门市价。
+ *
+ * 为什么必须先读快照：快照是「下单那一刻」记下的价（0011/0014 起写入），
+ * 用它才能保证事后调整 services 价目不会追溯改写历史单的金额与营收。
+ * 为什么会员价优先于门市价：会员实际支付的是会员价，门市价只是挂牌对比价。
+ *
+ * 注意：不要退回直接读 services.price —— 那正是 0014 迁移修掉的错算，
+ * 会让弹窗/报表显示顾客根本没付过的门市价。
+ */
+export function bookedPrice(a: {
+  member_price_snapshot?: number | null;
+  price_snapshot?: number | null;
+  services?: { member_price?: number | null; price?: number | null } | null;
+}): number {
+  const snap = a.member_price_snapshot ?? a.price_snapshot;
+  if (snap !== null && snap !== undefined) return Number(snap);
+  const svc = a.services;
+  return Number(svc?.member_price ?? svc?.price ?? 0);
+}
+
 export function formatDuration(minutes: number): string {
   if (minutes % 60 === 0) return `${minutes / 60}小时`;
   if (minutes < 60) return `${minutes}分钟`;

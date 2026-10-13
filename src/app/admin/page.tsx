@@ -1,6 +1,12 @@
 "use client";
 
-import { storeDayBounds, storeMonthStart } from "@/lib/format";
+import {
+  bookedPrice,
+  formatCNY,
+  formatTime,
+  storeDayBounds,
+  storeMonthStart,
+} from "@/lib/format";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -33,7 +39,6 @@ import { AdminQuickStart } from "@/components/admin/admin-quick-start";
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { q } from "@/lib/supabase/query";
-import { addDays, formatCNY, formatTime, startOfLocalDay } from "@/lib/format";
 import type { AppointmentWithRefs, Members } from "@/lib/types";
 
 export default function AdminDashboardPage() {
@@ -104,15 +109,9 @@ export default function AdminDashboardPage() {
         price_snapshot: number | null;
         member_price_snapshot: number | null;
       }[] | null) ?? [];
-    // 与报表同口径：优先下单时点快照，回退会员价→门市价（避免改价追溯改写历史营收）
-    setMonthRevenue(
-      doneRows.reduce((sum, r) => {
-        const snap = r.member_price_snapshot ?? r.price_snapshot;
-        const price =
-          snap ?? r.services?.member_price ?? r.services?.price ?? 0;
-        return sum + Number(price);
-      }, 0)
-    );
+    // 与报表/弹窗同口径：统一走 lib/format.ts 的 bookedPrice（快照优先、会员价优先），
+    // 避免改价追溯改写历史营收，也避免三处各写一遍后逐渐漂移。
+    setMonthRevenue(doneRows.reduce((sum, r) => sum + bookedPrice(r), 0));
     setMemberCount(members.count ?? 0);
     const balances = (members.data as Pick<Members, "balance">[] | null) ?? [];
     setBalanceSum(balances.reduce((sum, m) => sum + Number(m.balance), 0));

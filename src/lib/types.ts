@@ -370,7 +370,7 @@ export type Notifications = Tables["notifications"]["Row"];
 export type AppointmentWithRefs = Appointments & {
   members: Pick<Members, "id" | "name" | "phone"> | null;
   staff: Pick<Staff, "id" | "name" | "title"> | null;
-  services: Pick<Services, "id" | "name" | "duration" | "price"> | null;
+  services: Pick<Services, "id" | "name" | "duration" | "price" | "member_price"> | null;
 };
 
 export type ProductWithCategory = Products & {

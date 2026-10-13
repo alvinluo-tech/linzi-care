@@ -30,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { adminGet } from "@/lib/admin/client";
 import {
+  bookedPrice,
   combineStoreDateTime,
   formatCNY,
   storeDateKey,
@@ -45,19 +46,6 @@ interface ReportData {
   services: Services[];
   staff: Staff[];
   members: Members[];
-}
-
-/**
- * 单笔已完成预约的成交价。
- * 优先读下单时点的快照（0011 起写入），没有快照的历史单才回退到服务当前会员价/门市价。
- * 用快照而非服务现价，是为了让「调价」不再追溯改写历史营收；
- * 会员价优先于门市价，因为会员实际支付的是会员价。
- */
-function bookedPrice(a: ReportData["appointments"][number]): number {
-  const snapshot = a.member_price_snapshot ?? a.price_snapshot;
-  if (snapshot !== null && snapshot !== undefined) return Number(snapshot);
-  const svc = a.services;
-  return Number(svc?.member_price ?? svc?.price ?? 0);
 }
 
 const STATUS_COLORS: Record<string, string> = {
