@@ -82,9 +82,12 @@ export default function AdminStaffPage() {
         title: form.title.trim() || null,
         bio: form.bio.trim() || null,
       });
-      setCredentials(data);
+      // 先卸载「录入」弹窗，再挂载「凭证」弹窗，避免两者共用 z-index:50
+      // 的 portal 同时在场时互相穿透（详见 members/page.tsx 同处注释）。
       setCreateOpen(false);
       setForm({ name: "", email: "", phone: "", title: "", bio: "" });
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      setCredentials(data);
       toast.success("员工工匠账号已开立");
       void load();
     } catch (e) {

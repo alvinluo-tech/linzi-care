@@ -87,9 +87,14 @@ export default function AdminMembersPage() {
         phone: form.phone.trim() || null,
         initial_balance: form.balance ? Number(form.balance) : 0,
       });
-      setCredentials(data);
+      // 先卸载「录入」弹窗，再挂载「凭证」弹窗。
+      // 两个 Dialog 都通过 portal 挂到 body 且 z-index 同为 50，同时在场时
+      // 关闭中的那个仍会绘制一帧，导致下层表单文字从凭证面板边缘透出（层叠重影）。
+      // 用一帧间隔错开，保证任一时刻只有一个弹窗在 DOM 中。
       setCreateOpen(false);
       setForm({ name: "", email: "", phone: "", balance: "" });
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      setCredentials(data);
       toast.success("会员账号已创建");
       void load();
     } catch (e) {
