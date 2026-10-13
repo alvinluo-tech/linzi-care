@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Clock, LogIn, Sparkles, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { BrandMark, OrnamentDivider, SealMark } from "@/components/brand";
@@ -65,6 +65,10 @@ export function BookingWizard() {
   const [authChecked, setAuthChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [bookedId, setBookedId] = useState<string | null>(null);
+  // 从 /book?service=<id> 进来时记下是哪个项目，用于落地后自动滚到该卡片并高亮，
+  // 否则用户停在页面顶部、选中卡片在折叠线以下，会以为"点了没反应"而重复点选。
+  const [deepLinkServiceId, setDeepLinkServiceId] = useState<string | null>(null);
+  const deepLinkRef = useRef<HTMLButtonElement | null>(null);
   // 老板已确认的规则：券优先于余额。所以这里不做得选，命中就自动用。
   const [passes, setPasses] = useState<
     { id: string; title: string; expires_at: string | null }[]
@@ -88,8 +92,19 @@ export function BookingWizard() {
     if (initial.date) setDate(initial.date);
     if (initial.slot) setSlot(initial.slot);
     if (initial.remark) setRemark(initial.remark);
+    // 只有显式带 ?service= 才触发定位滚动；从草稿恢复时不打扰用户
+    if (preService) setDeepLinkServiceId(preService);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  // 项目列表就绪后，把深链选中的卡片滚到视野中部并短暂高亮
+  useEffect(() => {
+    if (!deepLinkServiceId || !services) return;
+    const t = setTimeout(() => {
+      deepLinkRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [deepLinkServiceId, services]);
 
   useEffect(() => {
     const draft: Draft = {
@@ -450,25 +465,31 @@ export function BookingWizard() {
                         key={s.id}
                         type="button"
                         onClick={() => selectService(s.id)}
+                        ref={s.id === deepLinkServiceId ? deepLinkRef : undefined}
                         className={cn(
                           "group relative flex flex-col rounded-xl border p-5 text-left transition-all duration-300",
                           active
                             ? "border-bronze-500 bg-bronze-50/40 shadow-sm ring-1 ring-bronze-500"
-                            : "border-border/80 bg-background/60 hover:border-bronze-300 hover:bg-paper/50"
+                            : "border-border/80 bg-background/60 hover:border-bronze-300 hover:bg-paper/50",
+                          // 深链落地时脉冲一次，把「已为你选好」这件事显性化
+                          s.id === deepLinkServiceId && "animate-[pulse_1.2s_ease-in-out_2]"
                         )}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <span className="font-serif text-lg text-bark-800 group-hover:text-bronze-800">
+                          {/* 项目名与品类角标分开两行：长名（如「姜汤头疗+头皮排污」）
+                              在窄屏下会把角标挤到第二行贴左缘，与右侧价格列争抢宽度，
+                              导致价格被压成窄条。拆成独立行后两者互不影响。 */}
+                          <div className="min-w-0 flex-1">
+                            <span className="block font-serif text-lg leading-snug text-bark-800 group-hover:text-bronze-800">
                               {s.name}
                             </span>
                             {s.category && (
-                              <span className="ml-2 rounded-sm bg-secondary px-2 py-0.5 text-[10px] text-bark-500">
+                              <span className="mt-1.5 inline-block rounded-sm bg-secondary px-2 py-0.5 text-[10px] text-bark-500">
                                 {s.category}
                               </span>
                             )}
                           </div>
-                          <div className="text-right">
+                          <div className="shrink-0 whitespace-nowrap text-right">
                             {s.member_price != null ? (
                               <>
                                 <span className="font-serif text-lg font-medium text-bronze-700">
