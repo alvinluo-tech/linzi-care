@@ -3,6 +3,7 @@ import { Geist_Mono, Noto_Sans_SC, Noto_Serif_SC } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { SessionOnlyGuard } from "@/components/session-only-guard";
+import { UmamiAnalytics } from "@/components/analytics/umami-analytics";
 import "./globals.css";
 
 // 第一性原理：中文用户只需要少数汉字字形，Google Fonts 按需切片（约 100+ 个
@@ -67,6 +68,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <ServiceWorkerRegister />
         <SessionOnlyGuard />
+        <UmamiAnalytics />
         <Toaster richColors position="top-center" />
       </body>
     </html>
