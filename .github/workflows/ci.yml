@@ -38,6 +38,18 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      # 说明：这里刻意不跑 tests/。该目录下的 e2e 与 browser 套件直连生产
-      # Supabase 项目，会真实修改会员余额并给真实顾客发通知；要进 CI 必须先
-      # 建 staging 项目并把 URL/口令从夹具改为环境变量。
+      # 时区与格式化是纯函数，不碰网络与数据库，可以在 CI 里安全地跑。
+      # 这是目前唯一进入 CI 的业务级断言 —— 它防的是"时刻整体偏移"这类
+      # 静默错误（页面不报错，但每个时间都差几个小时）。
+      - name: Timezone & formatting invariants
+        run: |
+          npx tsx scripts/verify-format-tz.mts
+          TZ=America/New_York npx tsx scripts/verify-format-tz-fallback.mts
+
+      # 说明：这里刻意不跑 tests/ 下的 e2e 与 browser 套件。
+      # 它们会真实修改会员余额、给真实顾客发通知，只有在指向**独立的**
+      # Supabase 分支库时才适合进 CI。落地步骤见 docs/TESTING.md。
+      #
+      # 相关的安全改造（已完成）：这两个套件原先硬编码了 service_role 密钥
+      # 与账号口令，现已全部改为读环境变量；缺少变量时明确报错退出，
+      # 而不是静默用错凭据打生产库。

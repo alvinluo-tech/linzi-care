@@ -11,6 +11,55 @@ const pad = (n: number) => String(n).padStart(2, "0");
  * 看成自己所在时区的前一天 19:00——时段列表、日营收分桶、"今日客次"全都会错位。
  * 因此所有面向用户的时刻渲染一律锚定店铺时区，与浏览器时区无关。
  */
+
+/**
+ * 门店时区的数值偏移（分钟）。用于不支持 IANA 时区名、只认固定偏移的老运行时。
+ * 目前 STORE_TZ_OFFSET 是 +08:00 且无夏令时，所以固定偏移是精确的；
+ * 若将来开到有夏令时的地区，这个回落值会有一小时的季节误差，届时必须
+ * 一并升级 combineStoreDateTime（见其注释）。
+ */
+const STORE_TZ_OFFSET_MINUTES = 8 * 60;
+
+/**
+ * 运行时对 IANA 时区的支持探测。
+ *
+ * 为什么需要：formatToParts + timeZone 依赖运行时的 ICU 数据。部分较老的
+ * Android WebView / 国产浏览器内核裁剪了时区库，此时 Intl 不会抛错，而是
+ * **静默回落到本地时区** —— 表现为所有时刻整体偏移，页面不报错、控制台干净。
+ * 这类静默错误比崩溃难查得多，所以这里主动探一次，探不到就走固定偏移兜底。
+ *
+ * 探测方式：拿一个已知 UTC 瞬间，看它在门店时区下的"小时"是否符合预期。
+ * 1970-01-01T00:00:00Z 在 +08:00 应为 08:00。
+ */
+function detectIanaSupport(): boolean {
+  try {
+    const probe = new Intl.DateTimeFormat("en-GB", {
+      timeZone: STORE_TIMEZONE,
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date(0));
+    // 探不出预期小时就认为不支持（可能是时区被忽略，也可能是 hourCycle 不认）
+    return probe === "08";
+  } catch {
+    return false;
+  }
+}
+
+const IANA_SUPPORTED = detectIanaSupport();
+
+/** 按固定偏移把时刻拆成门店时区的各字段（IANA 不可用时的兜底路径） */
+function storePartsByOffset(value: string | number | Date) {
+  const d = value instanceof Date ? value : new Date(value);
+  const shifted = new Date(d.getTime() + STORE_TZ_OFFSET_MINUTES * 60_000);
+  return {
+    year: String(shifted.getUTCFullYear()),
+    month: String(shifted.getUTCMonth() + 1).padStart(2, "0"),
+    day: String(shifted.getUTCDate()).padStart(2, "0"),
+    hour: String(shifted.getUTCHours()).padStart(2, "0"),
+    minute: String(shifted.getUTCMinutes()).padStart(2, "0"),
+  };
+}
+
 const storePartsFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: STORE_TIMEZONE,
   year: "numeric",
@@ -23,6 +72,10 @@ const storePartsFormatter = new Intl.DateTimeFormat("en-GB", {
 });
 
 function storeParts(value: string | number | Date) {
+  // IANA 时区不被支持时，Intl 会静默用本地时区，结果会整体偏移。
+  // 这种情况下宁可走固定偏移的算术实现，也不要一个悄悄算错的时刻。
+  if (!IANA_SUPPORTED) return storePartsByOffset(value);
+
   const d = value instanceof Date ? value : new Date(value);
   const out: Record<string, string> = {};
   for (const p of storePartsFormatter.formatToParts(d)) {
