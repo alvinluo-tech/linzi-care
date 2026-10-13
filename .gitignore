@@ -65,5 +65,13 @@ next-env.d.ts
 prod-server.log
 # 带端口后缀的同类日志（如 npx next start -p 3002 > prod-3002.log）
 prod-*.log
+# 开发服务器日志（npx next dev > dev-server.log）
+dev-server.log
+dev-*.log
+# 点号开头的临时诊断脚本/输出（本地排查用，不入库）
+.*.cjs
+.*.mts
+.*diag*.txt
+.*-check.txt
 # GUI 走查截图留证：体量大且可重新生成，结论已沉淀到 docs/GUI_AUDIT_2026-10-13.md
 /gui-test-screenshots/
