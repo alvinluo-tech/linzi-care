@@ -477,7 +477,7 @@ export default function HomePage() {
               今日始，与身心和解
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-sm leading-loose text-bark-200">
-              选择心仪的项目与技师，挑一段合适的时间——三步完成预约，到店凭会员身份轻松核销。
+              选择心仪的项目与技师，挑一段合适的时间——四步完成预约，到店凭会员身份轻松核销。
             </p>
             <p className="mx-auto mt-10 max-w-xl border-t border-bark-700 pt-9 font-serif text-sm leading-loose text-bronze-200">
               「{STORE_VISION}」
