@@ -14,7 +14,16 @@
 /coverage
 /test-results/
 /playwright-report/
-# 本地浏览器测试夹具内含生产凭据，禁止入库（口令改由 .env.local 提供）
+# 浏览器点击层测试：**不想入库**，但不该被"忽略"。
+#
+# 现状说明：这 14 个 spec 是唯一覆盖真实 UI 点击的资产，价值很高；此前
+# 它们内含硬编码的生产 service_role 与账号口令，只好整目录 ignore。
+# 那些密钥现已全部改为读 .env.local（见 tests/test-env.ts），所以内容是安全的；
+# 仍保留 ignore 只是不想在这一轮里顺带把历史文件一并纳入版本控制 ——
+# 那属于独立的清理动作，需要单独评审。
+#
+# 下一步（见 docs/TESTING.md）：确认目录内不再有敏感值后，删掉下面这行并
+# `git add tests/browser/`，让这套测试也纳入版本控制与 CI。
 /tests/browser/
 
 # next.js
