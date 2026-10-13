@@ -372,6 +372,97 @@ export default function AdminMembersPage() {
           data={rows}
           searchPlaceholder="输入姓名或手机号搜索会员..."
           emptyText="未检索到匹配的会员名籍"
+          renderMobileCard={(m) => (
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-serif font-medium text-bark-800">{m.name}</p>
+                  <p className="text-[11px] text-bark-400">
+                    {m.note ? m.note : formatDateTime(m.created_at) + " 入籍"}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide",
+                    m.is_active
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border-stone-300 bg-stone-100 text-stone-500"
+                  )}
+                >
+                  {m.is_active ? "正籍有效" : "休眠停用"}
+                </span>
+              </div>
+
+              <div className="flex items-end justify-between gap-3 border-t border-border/60 pt-3">
+                <div className="min-w-0 text-xs">
+                  <p className="font-medium text-bark-700">{m.phone ?? "未留手机"}</p>
+                  <p className="truncate font-mono text-[11px] text-bark-400">{m.email ?? ""}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[10px] text-bark-400">账户余额</p>
+                  <p className="font-serif text-lg font-semibold leading-tight text-bronze-700">
+                    {formatCNY(m.balance)}
+                  </p>
+                </div>
+              </div>
+
+              {/* 操作入口在窄屏下改为整行平铺，保证每一个手令都无需横向滚动即可触达 */}
+              <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 basis-[calc(50%-0.375rem)] text-xs text-bronze-700"
+                  onClick={() => {
+                    setBalanceTarget(m);
+                    setBalanceMode("set");
+                    setBalanceAmount(String(m.balance));
+                  }}
+                >
+                  <Wallet className="mr-1 size-3 text-bronze-600" /> 调余额
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 basis-[calc(50%-0.375rem)] text-xs text-bark-600"
+                  onClick={() => void openLogs(m)}
+                >
+                  <History className="mr-1 size-3 text-bark-400" /> 变动流水
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 basis-[calc(50%-0.375rem)] text-xs text-bark-600"
+                  onClick={() => setPassTarget(m)}
+                >
+                  <Ticket className="mr-1 size-3" /> 权益
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 basis-[calc(50%-0.375rem)] text-xs text-bark-600"
+                  onClick={() => setEditing(m)}
+                >
+                  编辑
+                </Button>
+                <AccountActions
+                  userId={m.user_id}
+                  email={m.email}
+                  active={m.is_active}
+                  name={m.name}
+                  onToggleBusiness={async (active) => {
+                    const { error } = await mutate(() =>
+                      createClient()
+                        .from("members")
+                        .update({ is_active: active })
+                        .eq("id", m.id)
+                    );
+                    if (error) throw new Error(error.message);
+                  }}
+                  onChanged={() => void load()}
+                />
+              </div>
+            </div>
+          )}
         />
       )}
 

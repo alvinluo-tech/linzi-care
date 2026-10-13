@@ -283,6 +283,65 @@ export default function AdminStaffPage() {
           data={rows}
           searchPlaceholder="输入技师姓名或电话即时搜索..."
           emptyText="暂无符合条件的工匠记录"
+          renderMobileCard={(s) => (
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-bark-700 font-serif text-xs font-semibold text-ivory">
+                    {s.name.slice(0, 1)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-serif font-medium text-bark-800">{s.name}</p>
+                    <p className="text-[11px] text-bronze-700">{s.title ?? "理疗师"}</p>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide",
+                    s.is_active
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border-stone-300 bg-stone-100 text-stone-500"
+                  )}
+                >
+                  {s.is_active ? "在岗接单" : "停工离休"}
+                </span>
+              </div>
+
+              <div className="flex items-end justify-between gap-3 border-t border-border/60 pt-3">
+                <div className="min-w-0 text-xs">
+                  <p className="font-medium text-bark-700">
+                    {s.profile?.phone ?? s.profile?.email ?? "未留电话"}
+                  </p>
+                  <p className="truncate font-mono text-[11px] text-bark-400">
+                    {s.profile?.email ?? ""}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[10px] text-bark-400">排序权重</p>
+                  <p className="font-mono text-sm text-bark-600">{s.sort_order}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 basis-[calc(50%-0.375rem)] text-xs text-bark-700"
+                  onClick={() => setEditing(s)}
+                >
+                  <Edit className="mr-1 size-3 text-bark-400" /> 编辑资料
+                </Button>
+                <AccountActions
+                  userId={s.user_id}
+                  email={s.profile?.email ?? null}
+                  active={s.is_active}
+                  name={s.name}
+                  onToggleBusiness={(active) => toggleBusiness(s, active)}
+                  onChanged={() => void load()}
+                />
+              </div>
+            </div>
+          )}
         />
       )}
 

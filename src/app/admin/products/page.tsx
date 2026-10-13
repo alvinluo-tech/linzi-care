@@ -398,6 +398,78 @@ export default function AdminProductsPage() {
           data={filteredProducts}
           searchPlaceholder="输入好物名称即时检索..."
           emptyText="当前品类下暂无展示商品"
+          renderMobileCard={(p) => (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="size-11 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-gradient-to-br from-bark-100 to-bronze-100 shadow-2xs">
+                  {p.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image_url} alt={p.name} className="size-full object-cover" />
+                  ) : (
+                    <span className="flex size-full items-center justify-center font-serif text-sm text-bark-400">
+                      {p.name.slice(0, 1)}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-serif font-medium text-bark-800">{p.name}</p>
+                  <p className="line-clamp-2 text-[11px] text-bark-400">
+                    {p.description ?? "暂无详述"}
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-md bg-secondary/80 px-2 py-0.5 text-[11px] text-bark-600">
+                      {p.product_categories?.name ?? "未分类"}
+                    </span>
+                    {(() => {
+                      const meta = STOCK_STATUS_META[p.stock_status];
+                      return (
+                        <span
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide",
+                            meta?.badge ?? "border-border text-bark-500"
+                          )}
+                        >
+                          {meta?.label ?? p.stock_status}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-serif text-base font-semibold leading-tight text-bronze-700">
+                    {formatCNY(p.price)}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 text-[10px] font-medium",
+                      p.is_active ? "text-emerald-700" : "text-bark-400"
+                    )}
+                  >
+                    {p.is_active ? "在架展示" : "下架隐匿"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 text-xs text-bark-700"
+                  onClick={() => openEdit(p)}
+                >
+                  <Edit className="mr-1 size-3 text-bark-400" /> 编辑好物
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 basis-[38%] text-xs text-rose-700"
+                  onClick={() => void remove(p)}
+                >
+                  <Trash2 className="mr-1 size-3" /> 删除
+                </Button>
+              </div>
+            </div>
+          )}
         />
       )}
 

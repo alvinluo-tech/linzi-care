@@ -45,6 +45,17 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string;
   emptyText?: string;
   toolbarExtra?: React.ReactNode;
+  /**
+   * 窄屏（< md）下每行的卡片渲染。
+   *
+   * 为什么需要它：表头/单元格都带 whitespace-nowrap，在 390px 的手机上
+   * 表格固有宽度远超容器，最右侧的「操作」列会被推到屏幕外，必须左右拖动才能点到，
+   * 掌柜在手机上会以为操作入口不存在。横向滚动在数据表里是可用性陷阱，
+   * 因此在窄屏改为「一条记录一张卡」的纵向堆叠：所有字段与操作都在首屏可达。
+   *
+   * 传入后：md 及以上仍渲染表格（保留排序/分页/搜索），md 以下渲染卡片。
+   */
+  renderMobileCard?: (row: TData) => React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -54,6 +65,7 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = "输入关键词即时检索...",
   emptyText = "暂无数据",
   toolbarExtra,
+  renderMobileCard,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -111,8 +123,33 @@ export function DataTable<TData, TValue>({
         {toolbarExtra && <div className="flex items-center gap-2">{toolbarExtra}</div>}
       </div>
 
-      {/* 数据表格视图 */}
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+      {/* 数据表格视图：md 及以上用表格，窄屏用卡片堆叠（见 renderMobileCard 注释） */}
+      {renderMobileCard && (
+        <div className="space-y-3 md:hidden">
+          {table.getRowModel().rows?.length ? (
+            table.getRowModel().rows.map((row) => (
+              <div
+                key={row.id}
+                className="rounded-xl border border-border bg-card p-3.5 shadow-xs"
+              >
+                {renderMobileCard(row.original)}
+              </div>
+            ))
+          ) : (
+            <div className="rounded-xl border border-border bg-card px-4 py-10 text-center text-xs text-bark-400">
+              {emptyText}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div
+        className={
+          renderMobileCard
+            ? "hidden overflow-hidden rounded-xl border border-border bg-card shadow-xs md:block"
+            : "overflow-hidden rounded-xl border border-border bg-card shadow-xs"
+        }
+      >
         <Table>
           <TableHeader className="bg-secondary/40">
             {table.getHeaderGroups().map((headerGroup) => (

@@ -416,6 +416,76 @@ export default function AdminServicesPage() {
           data={filteredServices}
           searchPlaceholder="输入服务名称即时检索..."
           emptyText="当前品类下暂无调理项目"
+          renderMobileCard={(s) => (
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-serif font-medium text-bark-800">{s.name}</p>
+                  <p className="line-clamp-2 text-[11px] text-bark-400">
+                    {s.description ?? "暂无详述"}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide",
+                    s.is_active
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border-stone-300 bg-stone-100 text-stone-500"
+                  )}
+                >
+                  {s.is_active ? "已上架供选" : "已下架隐藏"}
+                </span>
+              </div>
+
+              <div className="flex items-end justify-between gap-3 border-t border-border/60 pt-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-bark-600">
+                  <span className="rounded-md bg-secondary/80 px-2 py-0.5">
+                    {s.category ?? "常规调养"}
+                  </span>
+                  <span className="font-mono text-bark-500">
+                    {formatDuration(s.duration)}
+                  </span>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-serif text-base font-semibold leading-tight text-bronze-700">
+                    {formatCNY(s.price)}
+                  </p>
+                  {s.member_price != null && (
+                    <p className="text-[10px] text-bark-400">
+                      会籍 {formatCNY(s.member_price)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 basis-[calc(50%-0.375rem)] text-xs text-bark-700"
+                  onClick={() => openEdit(s)}
+                >
+                  <Edit className="mr-1 size-3 text-bark-400" /> 编辑
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 basis-[calc(50%-0.375rem)] text-xs text-bronze-700"
+                  onClick={() => openConfig(s)}
+                >
+                  <UsersRound className="mr-1 size-3 text-bronze-600" /> 分配技师
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 basis-full text-xs text-rose-700"
+                  onClick={() => void remove(s)}
+                >
+                  <Trash2 className="mr-1 size-3" /> 删除项目
+                </Button>
+              </div>
+            </div>
+          )}
         />
       )}
 
