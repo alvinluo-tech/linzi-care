@@ -9,7 +9,7 @@
  * 修复：管理端读操作统一走 /api/admin/*，服务端先核验 admin 身份再取数；
  * 非 admin 明文拒绝。
  */
-import { suite, expect, CREDENTIALS, SITE } from "../setup";
+import { suite, expect, retry, CREDENTIALS, SITE } from "../setup";
 
 /** 用指定账号的会话访问本地管理端接口（cookie 形式，与浏览器一致） */
 async function adminApiAs(
@@ -49,26 +49,39 @@ async function loginBundle(
   email: string,
   password: string
 ): Promise<{ token: string; cookie: string }> {
-  const r = await fetch(
-    "https://bzjsbiafxxgljbdcreqf.supabase.co/auth/v1/token?grant_type=password",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey:
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6anNiaWFmeHhnbGpiZGNyZXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTAyNTYsImV4cCI6MjEwNzI4NjI1Nn0.qEUQLQnfxUTjuYKtq8vxkJSmF_5y_6v10m6BF_hfTD0",
-      },
-      body: JSON.stringify({ email, password }),
+  // 必须带重试：本机到 Supabase 要走代理，单发请求偶发失败会返回非 JSON 或
+  // 缺失 access_token；那样拼出的 cookie 里 user 为 undefined，服务端
+  // requireAdmin() 的 getUser() 会判为未登录，测试却报「老板应被放行，实际 401」，
+  // 把网络抖动伪装成权限回归。setup.ts 的 login() 同样走 retry()。
+  const json = await retry(async () => {
+    const r = await fetch(
+      "https://bzjsbiafxxgljbdcreqf.supabase.co/auth/v1/token?grant_type=password",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey:
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6anNiaWFmeHhnbGpiZGNyZXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MTAyNTYsImV4cCI6MjEwNzI4NjI1Nn0.qEUQLQnfxUTjuYKtq8vxkJSmF_5y_6v10m6BF_hfTD0",
+        },
+        body: JSON.stringify({ email, password }),
+      }
+    );
+    const body = (await r.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      token_type?: string;
+      user?: unknown;
+    };
+    // 没有 token 就当作瞬时失败重试，而不是带着坏 cookie 继续跑
+    if (!body.access_token) {
+      throw new Error(
+        `${email} 换取会话失败（HTTP ${r.status}）：${JSON.stringify(body).slice(0, 200)}`
+      );
     }
-  );
-  const json = (await r.json()) as {
-    access_token?: string;
-    refresh_token?: string;
-    expires_in?: number;
-    token_type?: string;
-    user?: unknown;
-  };
-  expect(json.access_token, `${email} 登录失败`);
+    return body;
+  }, 5, 1500);
+
   const payload = {
     access_token: json.access_token,
     token_type: json.token_type,

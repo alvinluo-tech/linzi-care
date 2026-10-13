@@ -32,15 +32,44 @@ export type AdminCheck =
 export async function requireAdmin(): Promise<AdminCheck> {
   const supabase = await createClient();
 
-  const { data: auth, error: authError } = await supabase.auth.getUser();
-  if (authError || !auth.user) {
+  // getUser() 会向 Supabase 发一次网络请求来校验 token。三种结果必须区分开：
+  //   1. 取不到会话（没带 cookie / 会话结构缺失）—— 这是「未登录」，401；
+  //   2. 带了会话但服务端判为无效（status 401）—— 同样是「请重新登录」，401；
+  //   3. 网络抖动 / 超时 / 5xx —— 会话可能完全正常，不能谎报失效把人踢出去，应报 503。
+  // 三者原先都落到同一个 401，导致一次抖动就把已登录的掌柜登出。
+  const retriable = (e: { status?: number; code?: string; name?: string } | null) => {
+    if (!e) return false;
+    if (e.status === 401) return false;                 // 明确的未授权：重试无意义
+    if (e.code === "session_missing") return false;     // 压根没带会话：同样不该重试
+    if (e.name === "AuthSessionMissingError") return false;
+    return true;                                        // 其余（网络/超时/5xx）值得重试
+  };
+
+  let auth = await supabase.auth.getUser();
+  for (let i = 0; i < 2 && retriable(auth.error); i++) {
+    await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+    auth = await supabase.auth.getUser();
+  }
+
+  const { data, error: authError } = auth;
+  if (authError) {
+    const missingSession =
+      authError.code === "session_missing" ||
+      authError.name === "AuthSessionMissingError";
+    const unauthorized = authError.status === 401;
+    if (missingSession || unauthorized) {
+      return { ok: false, status: 401, error: "未登录或会话已失效，请重新登录" };
+    }
+    return { ok: false, status: 503, error: "暂时无法校验登录状态，请稍后重试" };
+  }
+  if (!data.user) {
     return { ok: false, status: 401, error: "未登录或会话已失效，请重新登录" };
   }
 
   const { data: roles, error: rolesError } = await supabase
     .from("user_roles")
     .select("role")
-    .eq("user_id", auth.user.id);
+    .eq("user_id", data.user.id);
 
   if (rolesError) {
     return { ok: false, status: 503, error: "角色校验失败，请稍后重试" };
@@ -53,8 +82,8 @@ export async function requireAdmin(): Promise<AdminCheck> {
 
   return {
     ok: true,
-    userId: auth.user.id,
-    email: auth.user.email ?? null,
+    userId: data.user.id,
+    email: data.user.email ?? null,
     supabase,
   };
 }
