@@ -48,3 +48,5 @@ next-env.d.ts
 
 # 本地运行日志与一次性诊断产物
 prod-server.log
+# 带端口后缀的同类日志（如 npx next start -p 3002 > prod-3002.log）
+prod-*.log
