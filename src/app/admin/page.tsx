@@ -29,6 +29,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { SealMark } from "@/components/brand";
 import { AppointmentDialog } from "@/components/admin/appointment-dialog";
 import { NewAppointmentDialog } from "@/components/admin/new-appointment-dialog";
+import { AdminQuickStart } from "@/components/admin/admin-quick-start";
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { q } from "@/lib/supabase/query";
@@ -152,6 +153,9 @@ export default function AdminDashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* 掌柜速览：默认折叠，首次上手时展开看，熟悉后不占版面 */}
+      <AdminQuickStart />
 
       {/* 六角资产与调度印章式统计台 */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
