@@ -3,8 +3,6 @@
 import {
   bookedPrice,
   formatCNY,
-  formatDateTime,
-  formatRelativeFromNow,
   formatTime,
   storeDayBounds,
   storeMonthStart,
@@ -38,6 +36,7 @@ import { SealMark } from "@/components/brand";
 import { AppointmentDialog } from "@/components/admin/appointment-dialog";
 import { NewAppointmentDialog } from "@/components/admin/new-appointment-dialog";
 import { AdminQuickStart } from "@/components/admin/admin-quick-start";
+import { PendingPanel } from "@/components/admin/pending-panel";
 import { useAppointmentsChanged } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { q } from "@/lib/supabase/query";
@@ -202,145 +201,13 @@ export default function AdminDashboardPage() {
       {/* 掌柜速览：默认折叠，首次上手时展开看，熟悉后不占版面 */}
       <AdminQuickStart />
 
-      {/* 待确认预约专栏：常驻显示，是掌柜接单的唯一固定入口（空态也有引导，避免入口"隐身"） */}
-      <div
-        id="pending-panel"
-        className={`scroll-mt-24 overflow-hidden rounded-2xl border p-6 shadow-sm ${
-          pendingAppointments && pendingAppointments.length > 0
-            ? "border-amber-300/80 bg-gradient-to-br from-amber-50/70 via-card to-amber-50/40"
-            : "border-border/80 bg-card"
-        } ${arrivedAtPanel ? "ring-2 ring-amber-400/70" : ""}`}
-      >
-        <div
-          className={`flex items-center justify-between border-b pb-3.5 ${
-            pendingAppointments && pendingAppointments.length > 0
-              ? "border-amber-200/70"
-              : "border-border/70"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Hourglass
-              className={`size-4 ${
-                pendingAppointments && pendingAppointments.length > 0
-                  ? "text-amber-700"
-                  : "text-bark-400"
-              }`}
-            />
-            <h2
-              className={`font-serif text-base font-medium ${
-                pendingAppointments && pendingAppointments.length > 0
-                  ? "text-amber-950"
-                  : "text-bark-800"
-              }`}
-            >
-              待确认预约 ({pendingAppointments?.length ?? "…"})
-            </h2>
-          </div>
-          <span
-            className={`text-xs ${
-              pendingAppointments && pendingAppointments.length > 0
-                ? "text-amber-800/80"
-                : "text-bark-400"
-            }`}
-          >
-            收到顾客预约后，在此确认接单
-          </span>
-        </div>
-
-        {pendingAppointments === null ? (
-          <div className="mt-4 space-y-2.5">
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : pendingAppointments.length === 0 ? (
-          <div className="flex flex-col items-center gap-1.5 py-10 text-center">
-            <p className="font-serif text-sm text-bark-500">
-              当前没有待确认的预约
-            </p>
-            <p className="max-w-md text-xs leading-relaxed text-bark-400">
-              顾客在预约页下单后，客单会实时出现在这里（同时收到提示音与手机推送）。
-              点击任一客单的「确认接单」即完成确认，顾客会同步收到通知。
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4 space-y-2.5">
-            {pendingAppointments.map((a) => {
-              const ago = now === null ? null : formatRelativeFromNow(a.created_at, now);
-              // 递出超过 2 小时的待确认单：老板可能已经错过顾客的耐心窗口，标红提醒
-              const stale =
-                now !== null &&
-                now - new Date(a.created_at).getTime() > 2 * 60 * 60 * 1000;
-              return (
-                <div
-                  key={a.id}
-                  role="button"
-                  tabIndex={0}
-                  className="cursor-pointer rounded-xl border border-amber-200/90 bg-card/90 p-4 transition-all duration-200 hover:border-amber-400 hover:shadow-xs"
-                  onClick={() => setSelected(a)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setSelected(a);
-                    }
-                  }}
-                >
-                  {/* 分三层：身份行 / 时间与技师行 / 操作行。
-                      原先备注内联在时段行里，顾客随手写两句身体状况就会把
-                      「处理此单」按钮挤到下一行——手机上按钮要滑一下才露出来。
-                      现在备注单独占一行并截断，按钮永远在固定位置。 */}
-                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                    <span className="font-serif text-base font-medium text-bark-800">
-                      {a.members?.name ?? "匿名会员"}
-                    </span>
-                    <span className="font-serif text-xs text-bronze-700">
-                      {a.services?.name ?? "理疗服务"}
-                    </span>
-                    <StatusBadge status={a.status} />
-                    {ago && (
-                      <span
-                        className={`ml-auto shrink-0 font-mono text-[11px] ${
-                          stale ? "font-medium text-rose-700" : "text-bark-400"
-                        }`}
-                        title={`递出于 ${formatDateTime(a.created_at)}`}
-                      >
-                        {stale ? "⚠ " : ""}
-                        {ago}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                    <p className="text-xs text-bark-500">
-                      预约时段：{formatTime(a.start_time)} – {formatTime(a.end_time)} ·
-                      指派技师：{a.staff?.name ?? "—"}
-                      {a.members?.phone ? (
-                        <span className="ml-2 font-mono text-bark-400">
-                          {a.members.phone}
-                        </span>
-                      ) : null}
-                    </p>
-                    <Button
-                      size="sm"
-                      className="shrink-0 bg-bronze-500 text-xs text-white hover:bg-bronze-600"
-                    >
-                      处理此单
-                    </Button>
-                  </div>
-
-                  {a.remark && (
-                    <p
-                      className="mt-2 truncate border-t border-amber-100 pt-2 text-xs text-bark-500"
-                      title={a.remark}
-                    >
-                      <span className="text-bark-400">顾客嘱托：</span>
-                      {a.remark}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* 待确认预约专栏：常驻显示，是掌柜接单的唯一固定入口（空态也有引导，避免入口“隐身”） */}
+      <PendingPanel
+        appointments={pendingAppointments}
+        now={now}
+        arrivedAtPanel={arrivedAtPanel}
+        onSelect={setSelected}
+      />
 
       {/* 今日排班与预约手折 */}
       <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
