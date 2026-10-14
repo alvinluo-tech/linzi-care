@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Check, Clock, LogIn, Sparkles, UserRound } from 
 import { toast } from "sonner";
 import { BrandMark, OrnamentDivider, SealMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
+import { Reveal } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -291,6 +292,22 @@ export function BookingWizard() {
     (step === 2 && Boolean(slot)) ||
     step === 3;
 
+  // 吸底栏上那行「已选了什么」：让顾客不必回头翻上面是否点中，
+  // 也让「还没选」这件事无需靠置灰按钮去猜。
+  const STEP_META: { picked: string | null; hint: string }[] = [
+    { picked: service?.name ?? null, hint: "请先选定一个调理项目" },
+    {
+      picked: staff ? `${staff.name}${staff.title ? ` · ${staff.title}` : ""}` : null,
+      hint: "请先指定一位专属技师",
+    },
+    {
+      picked: slot ? formatDateTime(slot) : null,
+      hint: date ? "请先选定一个到店时辰" : "请先选择到店日期",
+    },
+    { picked: null, hint: "" },
+  ];
+  const stepMeta = STEP_META[step];
+
   const submit = async () => {
     if (!member || !serviceId || !staffId || !slot) return;
     setSubmitting(true);
@@ -457,17 +474,17 @@ export function BookingWizard() {
                   ))}
                 </div>
               ) : (
-                <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                <div className="mt-10 grid gap-4 sm:grid-cols-2">
                   {services.map((s) => {
                     const active = serviceId === s.id;
                     return (
-                      <button
-                        key={s.id}
+                      <Reveal key={s.id} className="h-full">
+                        <button
                         type="button"
                         onClick={() => selectService(s.id)}
                         ref={s.id === deepLinkServiceId ? deepLinkRef : undefined}
                         className={cn(
-                          "group relative flex flex-col rounded-xl border p-5 text-left transition-all duration-300",
+                          "group relative flex h-full w-full flex-col rounded-xl border p-5 text-left transition-all duration-300",
                           active
                             ? "border-bronze-500 bg-bronze-50/40 shadow-sm ring-1 ring-bronze-500"
                             : "border-border/80 bg-background/60 hover:border-bronze-300 hover:bg-paper/50",
@@ -528,7 +545,8 @@ export function BookingWizard() {
                             {active ? "● 已选定" : "点击选此项目"}
                           </span>
                         </div>
-                      </button>
+                        </button>
+                      </Reveal>
                     );
                   })}
                 </div>
@@ -735,8 +753,8 @@ export function BookingWizard() {
 
                 <div className="mt-8">
                   {!authChecked ? (
-                    <p className="text-center text-sm text-bark-400">
-                      正在检查贵宾会籍状态…
+                    <p className="rounded-xl border border-dashed border-border/80 bg-paper/60 px-4 py-4 text-center text-xs text-bark-400">
+                      正在核对贵宾会籍状态…
                     </p>
                   ) : !member ? (
                     <div className="rounded-xl border border-bronze-300 bg-background p-6 text-center">
@@ -746,22 +764,11 @@ export function BookingWizard() {
                       <p className="mt-1.5 text-xs text-bark-500">
                         本馆采用封闭制账号管理。已开户会员请直接登录，登录后自动返回并保留已选项。
                       </p>
-                      <Button
-                        className="mt-4 bg-bronze-500 text-white hover:bg-bronze-600"
-                        onClick={() => router.push("/login?next=/book")}
-                      >
-                        <LogIn className="size-4" /> 登录会籍账号
-                      </Button>
                     </div>
                   ) : (
-                    <Button
-                      size="lg"
-                      disabled={submitting}
-                      onClick={submit}
-                      className="w-full bg-bronze-500 text-white hover:bg-bronze-600"
-                    >
-                      {submitting ? "正在呈送预约…" : "确认呈送预约 · 敬候到店"}
-                    </Button>
+                    <p className="text-center text-xs text-bark-400">
+                      核对无误后，点右下角「确认呈送」即录入门店排班。
+                    </p>
                   )}
                 </div>
               </div>
@@ -769,25 +776,70 @@ export function BookingWizard() {
           )}
         </div>
 
-        {/* 步骤导航按钮 */}
-        {step < 3 && (
-          <div className="mt-10 flex items-center justify-between border-t border-border/70 pt-6">
-            <Button
-              variant="ghost"
-              disabled={step === 0}
-              onClick={() => setStep(step - 1)}
-            >
-              <ArrowLeft className="size-4" /> 上一步
-            </Button>
-            <Button
-              disabled={!canNext}
-              onClick={() => setStep(step + 1)}
-              className="bg-bark-700 text-ivory hover:bg-bark-600"
-            >
-              下一步 <ArrowRight className="size-4" />
-            </Button>
+        {/* 吸底操作栏：四步共用一条。
+            从前「下一步」是正文流里的最后一行，项目卡堆叠起来后它落在折叠线以下，
+            顾客点完项目还要长滑到底才能继续，体感像"点了没反应"。
+            改为吸附在视口底部后，无论页面多长、选完哪一项，下一步都随手可及。
+            带半透明宣纸底 + 顶部发丝线，滚动时内容从底下穿过而不打架。 */}
+        <div className="sticky bottom-0 z-30 -mx-6 mt-10 border-t border-border/70 bg-card/95 px-6 pb-4 pt-4 backdrop-blur-md md:-mx-10 md:px-10">
+          <div className="flex items-center justify-between gap-3">
+            {step > 0 ? (
+              <Button
+                variant="ghost"
+                className="shrink-0"
+                onClick={() => setStep(step - 1)}
+              >
+                <ArrowLeft className="size-4" /> 上一步
+              </Button>
+            ) : (
+              <span className="text-[10px] tracking-widest text-bark-300">
+                壹 / 肆
+              </span>
+            )}
+
+            {/* 中段只放一行摘要：选了什么 / 还差什么 */}
+            <p className="min-w-0 flex-1 text-center text-xs">
+              {stepMeta.picked ? (
+                <span className="text-bark-600">
+                  <span className="text-bark-400">已选 · </span>
+                  <span className="font-serif text-bronze-700">{stepMeta.picked}</span>
+                </span>
+              ) : (
+                <span className="text-bark-400">{stepMeta.hint}</span>
+              )}
+            </p>
+
+            {step < 3 ? (
+              <Button
+                disabled={!canNext}
+                onClick={() => setStep(step + 1)}
+                className="shrink-0 bg-bark-700 text-ivory hover:bg-bark-600"
+              >
+                下一步 <ArrowRight className="size-4" />
+              </Button>
+            ) : !authChecked ? (
+              <span className="shrink-0 text-sm text-bark-400">
+                正在核对会籍…
+              </span>
+            ) : !member ? (
+              <Button
+                className="shrink-0 bg-bronze-500 text-white hover:bg-bronze-600"
+                onClick={() => router.push("/login?next=/book")}
+              >
+                <LogIn className="size-4" /> 登录会籍账号
+              </Button>
+            ) : (
+              <Button
+                disabled={submitting}
+                onClick={submit}
+                className="shrink-0 bg-bronze-500 text-white hover:bg-bronze-600"
+              >
+                <Check className="size-4" />
+                {submitting ? "正在呈送…" : "确认呈送"}
+              </Button>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
