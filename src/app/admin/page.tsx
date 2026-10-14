@@ -3,6 +3,8 @@
 import {
   bookedPrice,
   formatCNY,
+  formatDateTime,
+  formatRelativeFromNow,
   formatTime,
   storeDayBounds,
   storeMonthStart,
@@ -56,6 +58,42 @@ export default function AdminDashboardPage() {
 
   const [selected, setSelected] = useState<AppointmentWithRefs | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+
+  // 「3 分钟前」这类相对时间必须自己走，否则老板开着页面不动，标签会停在
+  // 打开那一刻的数字上 —— 半小时后还写着「刚刚」，反倒比不显示更误导。
+  // 空值初始化：无参 new Date() 在预渲染期是 unstable value（会报 Date.now()）。
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  /**
+   * 从手机顶栏的「N 单待接」跳进来时（URL 带 #pending-panel），
+   * 浏览器只会把元素滚进视野，不会告诉你「就是这块」。
+   * 这里额外打一圈琥珀色高亮，几秒后自动淡出，让老板一眼确认落点。
+   *
+   * 为什么监听 hashchange 而不只在挂载时读一次：从 /admin/calendar 等页面
+   * 点徽标跳过来时，客户端路由可能复用同一个页面实例而不重新挂载 ——
+   * 只在挂载时读 hash 会漏掉这一跳（实测就是这样，高亮没触发）。
+   */
+  const [arrivedAtPanel, setArrivedAtPanel] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = () => {
+      if (window.location.hash !== "#pending-panel") return;
+      setArrivedAtPanel(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setArrivedAtPanel(false), 3500);
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("hashchange", check);
+    };
+  }, []);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -156,61 +194,6 @@ export default function AdminDashboardPage() {
       {/* 掌柜速览：默认折叠，首次上手时展开看，熟悉后不占版面 */}
       <AdminQuickStart />
 
-      {/* 六角资产与调度印章式统计台 */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          icon={Clock3}
-          badge="今日"
-          label="今日预约客次"
-          value={
-            todayAppointments === null ? null : `${todayAppointments.length} 次`
-          }
-          sub="按东八区当日0点至24点核算"
-        />
-        <StatCard
-          icon={Hourglass}
-          badge="待决"
-          label="待确认预约"
-          value={pendingCount === null ? null : `${pendingCount} 单`}
-          sub="顾客前台递出，待掌柜接单 · 点击直达接单专区"
-          accent
-          onClick={() =>
-            document
-              .getElementById("pending-panel")
-              ?.scrollIntoView({ behavior: "smooth", block: "start" })
-          }
-        />
-        <StatCard
-          icon={ChartColumnBig}
-          badge="月度"
-          label="本月已履约客次"
-          value={monthDone === null ? null : `${monthDone} 次`}
-          sub="顺利完成调理并归档"
-        />
-        <StatCard
-          icon={Coins}
-          badge="营收"
-          label="本月履约营收"
-          value={monthDone === null ? null : formatCNY(monthRevenue)}
-          sub="实际完成服务价目累计"
-          accent
-        />
-        <StatCard
-          icon={UsersRound}
-          badge="客群"
-          label="馆内贵宾会员"
-          value={memberCount === null ? null : `${memberCount} 位`}
-          sub="封闭建档登记之会员档案"
-        />
-        <StatCard
-          icon={Coins}
-          badge="沉淀"
-          label="会员余额存管"
-          value={memberCount === null ? null : formatCNY(balanceSum)}
-          sub="纯服务端权威字段，受触发器严密保护"
-        />
-      </div>
-
       {/* 待确认预约专栏：常驻显示，是掌柜接单的唯一固定入口（空态也有引导，避免入口"隐身"） */}
       <div
         id="pending-panel"
@@ -218,7 +201,7 @@ export default function AdminDashboardPage() {
           pendingAppointments && pendingAppointments.length > 0
             ? "border-amber-300/80 bg-gradient-to-br from-amber-50/70 via-card to-amber-50/40"
             : "border-border/80 bg-card"
-        }`}
+        } ${arrivedAtPanel ? "ring-2 ring-amber-400/70" : ""}`}
       >
         <div
           className={`flex items-center justify-between border-b pb-3.5 ${
@@ -272,16 +255,31 @@ export default function AdminDashboardPage() {
           </div>
         ) : (
           <div className="mt-4 space-y-2.5">
-            {pendingAppointments.map((a) => (
-              <div
-                key={a.id}
-                role="button"
-                tabIndex={0}
-                className="flex cursor-pointer flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/90 bg-card/90 p-4 transition-all duration-200 hover:border-amber-400 hover:shadow-xs"
-                onClick={() => setSelected(a)}
-              >
-                <div>
-                  <div className="flex items-center gap-2.5">
+            {pendingAppointments.map((a) => {
+              const ago = now === null ? null : formatRelativeFromNow(a.created_at, now);
+              // 递出超过 2 小时的待确认单：老板可能已经错过顾客的耐心窗口，标红提醒
+              const stale =
+                now !== null &&
+                now - new Date(a.created_at).getTime() > 2 * 60 * 60 * 1000;
+              return (
+                <div
+                  key={a.id}
+                  role="button"
+                  tabIndex={0}
+                  className="cursor-pointer rounded-xl border border-amber-200/90 bg-card/90 p-4 transition-all duration-200 hover:border-amber-400 hover:shadow-xs"
+                  onClick={() => setSelected(a)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelected(a);
+                    }
+                  }}
+                >
+                  {/* 分三层：身份行 / 时间与技师行 / 操作行。
+                      原先备注内联在时段行里，顾客随手写两句身体状况就会把
+                      「处理此单」按钮挤到下一行——手机上按钮要滑一下才露出来。
+                      现在备注单独占一行并截断，按钮永远在固定位置。 */}
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                     <span className="font-serif text-base font-medium text-bark-800">
                       {a.members?.name ?? "匿名会员"}
                     </span>
@@ -289,17 +287,49 @@ export default function AdminDashboardPage() {
                       {a.services?.name ?? "理疗服务"}
                     </span>
                     <StatusBadge status={a.status} />
+                    {ago && (
+                      <span
+                        className={`ml-auto shrink-0 font-mono text-[11px] ${
+                          stale ? "font-medium text-rose-700" : "text-bark-400"
+                        }`}
+                        title={`递出于 ${formatDateTime(a.created_at)}`}
+                      >
+                        {stale ? "⚠ " : ""}
+                        {ago}
+                      </span>
+                    )}
                   </div>
-                  <p className="mt-1 text-xs text-bark-500">
-                    预约时段：{formatTime(a.start_time)} – {formatTime(a.end_time)} · 指派技师：{a.staff?.name ?? "—"}
-                    {a.remark ? ` · 备注：${a.remark}` : ""}
-                  </p>
+
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <p className="text-xs text-bark-500">
+                      预约时段：{formatTime(a.start_time)} – {formatTime(a.end_time)} ·
+                      指派技师：{a.staff?.name ?? "—"}
+                      {a.members?.phone ? (
+                        <span className="ml-2 font-mono text-bark-400">
+                          {a.members.phone}
+                        </span>
+                      ) : null}
+                    </p>
+                    <Button
+                      size="sm"
+                      className="shrink-0 bg-bronze-500 text-xs text-white hover:bg-bronze-600"
+                    >
+                      处理此单
+                    </Button>
+                  </div>
+
+                  {a.remark && (
+                    <p
+                      className="mt-2 truncate border-t border-amber-100 pt-2 text-xs text-bark-500"
+                      title={a.remark}
+                    >
+                      <span className="text-bark-400">顾客嘱托：</span>
+                      {a.remark}
+                    </p>
+                  )}
                 </div>
-                <Button size="sm" className="bg-bronze-500 text-xs text-white hover:bg-bronze-600">
-                  处理此单
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -384,6 +414,64 @@ export default function AdminDashboardPage() {
         onChanged={() => void load()}
       />
 
+      {/* 六角资产与调度印章式统计台。
+          刻意排在「接单专区」与「今日排班」之后：这三块是老板每天真正要动手的，
+          统计卡只是「看一眼」的经营概览。原先把统计台放在最前，手机上六张卡
+          竖排要吃掉 1297px（实测），接单按钮被顶到 y=1788 —— 比首屏低一整屏多。 */}
+      <div className="grid gap-3 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+        <StatCard
+          icon={Clock3}
+          badge="今日"
+          label="今日预约客次"
+          value={
+            todayAppointments === null ? null : `${todayAppointments.length} 次`
+          }
+          sub="按东八区当日0点至24点核算"
+        />
+        <StatCard
+          icon={Hourglass}
+          badge="待决"
+          label="待确认预约"
+          value={pendingCount === null ? null : `${pendingCount} 单`}
+          sub="顾客前台递出，待掌柜接单 · 点击直达接单专区"
+          accent
+          onClick={() =>
+            document
+              .getElementById("pending-panel")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+        />
+        <StatCard
+          icon={ChartColumnBig}
+          badge="月度"
+          label="本月已履约客次"
+          value={monthDone === null ? null : `${monthDone} 次`}
+          sub="顺利完成调理并归档"
+        />
+        <StatCard
+          icon={Coins}
+          badge="营收"
+          label="本月履约营收"
+          value={monthDone === null ? null : formatCNY(monthRevenue)}
+          sub="实际完成服务价目累计"
+          accent
+        />
+        <StatCard
+          icon={UsersRound}
+          badge="客群"
+          label="馆内贵宾会员"
+          value={memberCount === null ? null : `${memberCount} 位`}
+          sub="封闭建档登记之会员档案"
+        />
+        <StatCard
+          icon={Coins}
+          badge="沉淀"
+          label="会员余额存管"
+          value={memberCount === null ? null : formatCNY(balanceSum)}
+          sub="纯服务端权威字段，受触发器严密保护"
+        />
+      </div>
+
       {/* 快捷通道 */}
       <div className="flex flex-wrap gap-2.5">
         <Button asChild variant="outline" size="sm" className="text-xs">
@@ -438,7 +526,7 @@ function StatCard({
             }
           : undefined
       }
-      className={`relative flex flex-col justify-between overflow-hidden rounded-2xl border p-6 shadow-sm transition-all duration-300 hover:shadow-md ${
+      className={`relative flex flex-col justify-between overflow-hidden rounded-xl border p-4 shadow-sm transition-all duration-300 hover:shadow-md sm:rounded-2xl sm:p-6 ${
         onClick ? "cursor-pointer" : ""
       } ${
         accent
@@ -446,29 +534,31 @@ function StatCard({
           : "border-border/80 bg-card"
       }`}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="font-serif text-[11px] tracking-widest text-bronze-700">
           {badge}
         </span>
-        <span className="flex size-8 items-center justify-center rounded-full bg-secondary/80">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary/80">
           <Icon className={`size-4 ${accent ? "text-bronze-600" : "text-bark-400"}`} />
         </span>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-2 sm:mt-4">
         <p className="text-xs text-bark-400">{label}</p>
         <div className="mt-1">
           {value === null ? (
-            <Skeleton className="h-9 w-24" />
+            <Skeleton className="h-8 w-24 sm:h-9" />
           ) : (
-            <p className="font-serif text-3xl font-medium text-bark-800">
+            <p className="font-serif text-2xl font-medium text-bark-800 sm:text-3xl">
               {value}
             </p>
           )}
         </div>
       </div>
 
-      <p className="mt-4 border-t border-border/60 pt-3 text-[11px] text-bark-400">
+      {/* 说明文字在窄屏收起：它是「口径注解」，老板看熟了就不需要，
+          留着只会让六张卡再高一截 */}
+      <p className="mt-3 hidden border-t border-border/60 pt-3 text-[11px] text-bark-400 sm:mt-4 sm:block">
         {sub}
       </p>
     </div>

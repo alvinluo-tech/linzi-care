@@ -9,6 +9,10 @@ export const STORE_DESCRIPTION =
 export const STORE_VISION =
   "健康一个人，幸福一个家，和谐一个社会，强大一个民族。";
 
+/** 门店地址。首页页脚、预约日历事件等需要「顾客真正能导航过去」的地方共用一处。 */
+export const STORE_ADDRESS =
+  "广州市增城区新塘镇国贸汇 · 林梓·头疗美容养生";
+
 /**
  * 门店营业时区（IANA 名称）。
  *

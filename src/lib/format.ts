@@ -250,6 +250,34 @@ export function formatDuration(minutes: number): string {
   return `${Math.floor(minutes / 60)}小时${minutes % 60}分钟`;
 }
 
+/**
+ * 「刚递出多久」的相对时间，用于待确认客单。
+ *
+ * 接单是时效动作：顾客递出后越久没响应，到店体验越差。绝对时间戳
+ * （09:39）要老板自己心算，而「3 分钟前」一眼就能判断该不该马上处理。
+ *
+ * 刻意不做「未来时间」的措辞分支：时钟漂移或服务端时间略快时会算出负数，
+ * 直接归到「刚刚」，绝不让界面出现「-2 分钟前」这种鬼话。
+ */
+export function formatRelativeFromNow(
+  iso?: string | null,
+  now: number = Date.now()
+): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+
+  const diff = now - t;
+  if (diff < 60_000) return "刚刚";
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} 天前`;
+  return formatDateTime(iso);
+}
+
 export type AppointmentStatus =
   | "pending"
   | "confirmed"

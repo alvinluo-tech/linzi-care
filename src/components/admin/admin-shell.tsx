@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ChartColumnBig,
   Globe,
+  Hourglass,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -44,11 +45,12 @@ const NAV_ITEMS = [
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pendingCount = usePendingCount();
 
   return (
     <div className="min-h-svh">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <SideContent />
+        <SideContent pendingCount={pendingCount} />
       </aside>
 
       <div className="flex min-h-svh min-w-0 flex-col md:pl-60">
@@ -66,11 +68,28 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <SheetHeader className="sr-only">
                 <SheetTitle>管理端导航</SheetTitle>
               </SheetHeader>
-              <SideContent onNavigate={() => setMobileOpen(false)} />
+              <SideContent
+                pendingCount={pendingCount}
+                onNavigate={() => setMobileOpen(false)}
+              />
             </SheetContent>
           </Sheet>
           <span className="font-serif tracking-widest">林梓精养馆 · 管理端</span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1.5">
+            {/* 接单是老板手机端最高频的动作，而侧边抽屉里的入口藏在
+                「仪表盘」那一项的角标上 —— 得先想到开菜单、再知道角标在
+                哪一项、进去还要从六张统计卡里找专区，全程五六步。
+                这里直接把数字摆到顶栏，点一下直达接单专区。 */}
+            {pendingCount !== null && pendingCount > 0 && (
+              <Link
+                href="/admin#pending-panel"
+                aria-label={`${pendingCount} 单待确认，前往接单`}
+                className="flex h-7 items-center gap-1 rounded-full bg-amber-500 px-2.5 font-mono text-xs leading-none text-white shadow-xs transition-colors hover:bg-amber-600"
+              >
+                <Hourglass className="size-3.5" />
+                {pendingCount} 单待接
+              </Link>
+            )}
             <NotificationBell />
           </div>
         </header>
@@ -81,11 +100,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SideContent({ onNavigate }: { onNavigate?: () => void }) {
+function SideContent({
+  onNavigate,
+  pendingCount,
+}: {
+  onNavigate?: () => void;
+  pendingCount: number | null;
+}) {
   const pathname = usePathname();
   const router = useRouter();
-  // 待确认角标：无论身在哪个管理页，都能看到有客单等着接
-  const pendingCount = usePendingCount();
 
   const isActive = (item: (typeof NAV_ITEMS)[number]) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href);

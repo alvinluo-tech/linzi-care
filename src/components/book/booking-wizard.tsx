@@ -3,9 +3,16 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Clock, LogIn, Sparkles, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarPlus,
+  Check,
+  Clock,
+  LogIn,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
-import { BrandMark, OrnamentDivider, SealMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,8 +30,9 @@ import {
   formatTime,
   weekdayLabel,
 } from "@/lib/format";
-import { BOOKING_DAYS_AHEAD } from "@/lib/constants";
+import { BOOKING_DAYS_AHEAD, STORE_ADDRESS, STORE_NAME } from "@/lib/constants";
 import { slotMoodLabel } from "@/lib/design";
+import { downloadAppointmentIcs, type IcsInput } from "@/lib/ics";
 import type { Members, Services, Staff, StaffServices } from "@/lib/types";
 import { PushNotificationButton } from "@/components/pwa/push-notification-button";
 
@@ -329,6 +337,27 @@ export function BookingWizard() {
     setBookedId(data as string);
   };
 
+  /**
+   * 组装日历事件。结束时间用项目时长推算 —— create_appointment 只回单号，
+   * 不返回 end_time，而我们此刻手上正好有 duration，没必要为这一个字段多查一次。
+   * 时长缺失时退回 60 分钟，宁可能差一点也不能给日历一个零长度事件。
+   */
+  const buildIcsInput = (): IcsInput & { fileName: string } => {
+    const start = new Date(slot ?? Date.now());
+    const minutes = service?.duration && service.duration > 0 ? service.duration : 60;
+    const end = new Date(start.getTime() + minutes * 60_000);
+    return {
+      serviceName: service?.name ?? "理疗项目",
+      staffName: staff?.name ?? "专属技师",
+      startIso: start.toISOString(),
+      endIso: end.toISOString(),
+      storeName: STORE_NAME,
+      storeAddress: STORE_ADDRESS,
+      bookingRef: bookedId ?? "pending",
+      fileName: `林梓精养馆-${service?.name ?? "预约"}.ics`,
+    };
+  };
+
   if (bookedId) {
     return (
       <div className="mx-auto max-w-lg">
@@ -393,6 +422,12 @@ export function BookingWizard() {
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Button asChild className="bg-bronze-500 text-white hover:bg-bronze-600">
             <Link href="/my">查看我的预约</Link>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => downloadAppointmentIcs(buildIcsInput())}
+          >
+            <CalendarPlus className="size-4" /> 添加到日历
           </Button>
           <Button asChild variant="outline">
             <Link href="/">返回首页</Link>

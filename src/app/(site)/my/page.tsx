@@ -203,6 +203,9 @@ export default function MyPage() {
     );
   }
 
+  // 即将赴约：最早的排最前（离现在最近的最需要看到）。
+  // 查询本身是 start_time 降序，所以这里必须 reverse 回升序 —— 两个方向的
+  // 依赖是隐式的，改动上面的 .order() 会静默翻转本区块的顺序。
   const upcoming =
     now === null
       ? []
@@ -213,6 +216,7 @@ export default function MyPage() {
               ["pending", "confirmed", "arrived"].includes(a.status)
           )
           .reverse();
+  // 历史足迹：最近的排最前，保留查询的降序，无需再排。
   const history = appointments.filter((a) => !upcoming.includes(a));
 
   return (
@@ -308,7 +312,44 @@ export default function MyPage() {
                 收支审计账折 · 每一笔变动皆由掌柜经手核对
               </p>
             </div>
-            <table className="w-full text-sm">
+
+            {/* 窄屏：卡片堆叠。四列表格在 390px 下会把字号压到读不清，
+                而资产变动正是顾客最想看清金额的地方。与后台 DataTable
+                的 renderMobileCard 同一套做法：窄屏卡片、宽屏表格。 */}
+            <ul className="divide-y divide-border/60 md:hidden">
+              {balanceLogs.length === 0 ? (
+                <li className="px-5 py-12 text-center text-xs text-bark-400">
+                  暂无账目变动记录
+                </li>
+              ) : (
+                balanceLogs.map((log) => (
+                  <li key={log.id} className="px-5 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 flex-1 font-serif text-sm text-bark-700">
+                        {log.reason}
+                      </p>
+                      <p
+                        className={`shrink-0 font-mono text-base font-medium ${
+                          log.delta >= 0 ? "text-emerald-700" : "text-rose-700"
+                        }`}
+                      >
+                        {log.delta >= 0 ? "+" : ""}
+                        {formatCNY(log.delta)}
+                      </p>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-bark-400">
+                      <span>{formatDateTime(log.created_at)}</span>
+                      <span className="font-mono">
+                        结余 {formatCNY(log.new_balance)}
+                      </span>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+
+            {/* 宽屏：完整四列表格 */}
+            <table className="hidden w-full text-sm md:table">
               <thead className="border-b border-border/60 bg-secondary/30 text-left text-xs text-bark-500">
                 <tr>
                   <th className="px-5 py-3.5 font-normal">日期时辰</th>

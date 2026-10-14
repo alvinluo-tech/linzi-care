@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Clock } from "lucide-react";
+import { ArrowRight, Clock, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal } from "@/components/ui/reveal";
 import { OrnamentDivider, SealMark } from "@/components/brand";
@@ -16,6 +17,7 @@ import type { Services } from "@/lib/types";
 export default function ServicesPage() {
   const [services, setServices] = useState<Services[] | null>(null);
   const [category, setCategory] = useState("全部");
+  const [keyword, setKeyword] = useState("");
 
   useEffect(() => {
     q(() =>
@@ -36,12 +38,26 @@ export default function ServicesPage() {
     return set;
   }, [services]);
 
+  // 搜索与分类是「与」的关系：先按分类收窄，再按关键词筛。
+  // 关键词覆盖项目名、描述与场景标签 —— 顾客记得住的往往是症状
+  // （「失眠」「肩颈」），而不是项目全名。
   const filtered = useMemo(() => {
     if (!services) return [];
-    return category === "全部"
-      ? services
-      : services.filter((s) => s.category === category);
-  }, [services, category]);
+    const byCategory =
+      category === "全部"
+        ? services
+        : services.filter((s) => s.category === category);
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return byCategory;
+    return byCategory.filter((s) =>
+      [s.name, s.description ?? "", s.category ?? "", sceneTagFor(s.category) ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(kw)
+    );
+  }, [services, category, keyword]);
+
+  const searching = keyword.trim().length > 0;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-24">
@@ -60,9 +76,33 @@ export default function ServicesPage() {
         </p>
       </div>
 
+      {/* 搜索：项目会长到几十个，逐个扫太慢；顾客记得住的通常也是症状而非项目名 */}
+      <div className="mx-auto mt-10 max-w-md">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-bark-400" />
+          <Input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="搜症状或项目名，如「失眠」「肩颈」「头疗」"
+            aria-label="搜索服务项目"
+            className="h-11 rounded-full border-border/80 bg-card pl-10 pr-10 text-sm"
+          />
+          {searching && (
+            <button
+              type="button"
+              onClick={() => setKeyword("")}
+              aria-label="清空搜索"
+              className="absolute right-3 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-full text-bark-400 transition-colors hover:bg-secondary hover:text-bark-600"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* 分类切换：文人印章雅致胶囊 */}
       {services !== null && categories.length > 0 && (
-        <div className="mt-12 flex flex-wrap justify-center gap-2.5">
+        <div className="mt-8 flex flex-wrap justify-center gap-2.5">
           {["全部", ...categories].map((c) => {
             const active = category === c;
             return (
@@ -83,6 +123,15 @@ export default function ServicesPage() {
         </div>
       )}
 
+      {/* 结果计数：让「有没有搜到」有明确回执，而不是靠数卡片 */}
+      {services !== null && (
+        <p className="mt-6 text-center text-xs text-bark-400">
+          {searching
+            ? `「${keyword.trim()}」共 ${filtered.length} 个项目`
+            : `${category === "全部" ? "全部" : category} · 共 ${filtered.length} 个项目`}
+        </p>
+      )}
+
       {/* 服务项目网格 */}
       <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {services === null ? (
@@ -91,9 +140,23 @@ export default function ServicesPage() {
           ))
         ) : filtered.length === 0 ? (
           <div className="col-span-full rounded-xl border border-dashed border-border bg-card/50 px-6 py-20 text-center text-sm text-bark-400">
-            {services.length === 0
-              ? "服务项目准备中，敬请期待"
-              : "该分类暂无项目，看看其他分类吧"}
+            {services.length === 0 ? (
+              "服务项目准备中，敬请期待"
+            ) : searching ? (
+              <span>
+                未找到与「{keyword.trim()}」相关的项目。
+                <button
+                  type="button"
+                  onClick={() => setKeyword("")}
+                  className="ml-1 text-bronze-700 underline underline-offset-4"
+                >
+                  清空搜索
+                </button>
+                {category !== "全部" && "，或换一个分类看看"}
+              </span>
+            ) : (
+              "该分类暂无项目，看看其他分类吧"
+            )}
           </div>
         ) : (
           filtered.map((service, i) => (
