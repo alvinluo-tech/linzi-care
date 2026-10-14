@@ -43,6 +43,36 @@ async function main() {
     process.exit(2);
   }
 
+  // 身份护栏：确认将要被扣款/删单的账号确实是测试账号。
+  //
+  // 为什么要在开跑前单独做一次：套件内部的 assertIsTestMember 会在动手前拦截，
+  // 但那时可能已经跑过了几十个用例、改过余额。这里提前失败，既省时间，也让
+  // 原因一目了然 —— 「测试账号配错了」而不是一堆莫名其妙的断言失败。
+  try {
+    const { makeClient } = await import("./setup");
+    const { resolveTestMember } = await import("../test-guard");
+    const boss = makeClient();
+    const { error } = await boss.auth.signInWithPassword({
+      email: process.env.E2E_ADMIN_EMAIL!,
+      password: process.env.E2E_ADMIN_PASSWORD!,
+    });
+    if (error) throw new Error(`老板账号登录失败：${error.message}`);
+
+    const member = await resolveTestMember(boss, "run-all 前置检查");
+    console.log(
+      `身份护栏：测试账号已确认 ✓ ${member.name} <${member.email}> 余额 ¥${member.balance}\n` +
+        `  ⚠ 本次测试会真实修改该账号余额、并删除其带 E2E-TEST 标记的预约。`
+    );
+  } catch (e) {
+    console.error("\n身份护栏拦截 —— 拒绝在身份不明的情况下运行破坏性测试：");
+    console.error(e instanceof Error ? e.message : String(e));
+    console.error(
+      "\n修法：检查 .env.local 的 E2E_MEMBER_EMAIL 是否指向真正的测试账号，" +
+        "必要时用 E2E_TEST_DOMAINS 指定允许的测试域名。"
+    );
+    process.exit(2);
+  }
+
   const suites: TestSuite[] = [
     publicSpec,
     authSpec,
