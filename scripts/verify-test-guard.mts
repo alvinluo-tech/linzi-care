@@ -58,13 +58,15 @@ check(
 
 // 2) 真实顾客邮箱：应拦截（这是最要命的场景 —— E2E_MEMBER_EMAIL 配错了）
 check(
-  "真实顾客邮箱（与配置不符）",
+  "非白名单域名的邮箱（与配置不符）",
   () =>
     assertIsTestMember(
       {
         id: "y",
-        name: "陈萌兰",
-        email: "luoyaosheng123@gmail.com",
+        name: "某顾客",
+        // 刻意用示例域名而不是真实顾客的邮箱：这是公开仓库，
+        // 真实顾客的 PII 不该出现在测试夹具里（哪怕只是常量）。
+        email: "customer@example.com",
         balance: 200,
       },
       "单元测试"
