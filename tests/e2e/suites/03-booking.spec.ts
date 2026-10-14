@@ -1,4 +1,5 @@
 import { CREDENTIALS, ctx, E2E_TAG, expect, login, q, retry, suite } from "../setup";
+import { assertIsTestMember } from "../../test-guard";
 
 /**
  * 模块三：顾客预约旅程
@@ -13,14 +14,19 @@ export const bookingSpec = suite("顾客预约旅程", [
 
       const { data: me } = await retry(() => member.auth.getUser());
       const memberRow = await retry(() =>
-        q(member.from("members").select("id, name, balance").eq("user_id", me.user!.id).single())
+        q(member.from("members").select("id, name, email, balance").eq("user_id", me.user!.id).single())
       );
       expect(!!memberRow, "读取会员档案失败");
-      ctx.memberId = memberRow.id;
+
+      // 安全护栏：ctx.memberId 是后续所有破坏性操作（扣款、改余额、删单）的目标。
+      // 在把它固定下来之前，必须证明它就是配置的测试账号 —— 万一
+      // E2E_MEMBER_EMAIL 被错配成真实顾客，这里当场中止，而不是扣错人的钱。
+      const testMember = assertIsTestMember(memberRow, "03-booking 建立测试会员上下文");
+      ctx.memberId = testMember.id;
       // 记账基线：必须在任何预约产生之前记录。
       // 「预约即扣款」生效后，创建预约会先扣款、取消/删除再退回；
       // 若baseline取自扣款之后，清理阶段的退款会让余额高于基线而误报。
-      ctx.originalBalance = Number(memberRow.balance);
+      ctx.originalBalance = testMember.balance;
 
       const svc = await retry(() =>
         q(member.from("services").select("id, name, duration").eq("name", "姜汤头疗").single())

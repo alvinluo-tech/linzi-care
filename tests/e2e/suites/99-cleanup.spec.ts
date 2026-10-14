@@ -1,4 +1,5 @@
 import { CREDENTIALS, ctx, E2E_TAG, expect, login, q, retry, suite } from "../setup";
+import { assertIsTestMember } from "../../test-guard";
 
 /**
  * 模块七：清扫（E2E 产生的测试数据）
@@ -9,6 +10,14 @@ export const cleanupSpec = suite("测试数据清扫", [
     name: "GIVEN E2E 测试单 WHEN 清扫 THEN 按 E2E 标记删除且未退款金额被精确退回",
     run: async () => {
       const boss = ctx.boss ?? (await login(CREDENTIALS.boss.email, CREDENTIALS.boss.password));
+
+      // 删除预约会触发结算触发器退款，因此退款最终落到 ctx.memberId 的余额上。
+      // 动手之前再次确认这个 id 仍是测试账号：万一前面的套件因为配置错误
+      // 把 ctx.memberId 指到了真实顾客身上，这里必须拦住。
+      const target = await retry(() =>
+        q(boss.from("members").select("id, name, email, balance").eq("id", ctx.memberId).single())
+      );
+      assertIsTestMember(target, "99-cleanup 清扫前复核");
 
       // 删除前记录：待删单里还有多少「已扣未退」的钱，以及当前余额。
       // 「预约即扣款」下，删除预约会触发结算触发器退款，故删除后余额应增加这部分金额。
