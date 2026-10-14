@@ -24,6 +24,9 @@ export function Reveal({ children, className, delay = 0 }: RevealProps) {
     if (!el) return;
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      // 尊重"减少动态效果"偏好：直接显示，不播入场动画。
+      // 这一步依赖 ref.current（挂载后才有），无法用惰性初始化替代。
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 需先取得 DOM 节点才能判断是否跳过动画
       setVisible(true);
       return;
     }

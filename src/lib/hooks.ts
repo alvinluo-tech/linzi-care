@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { adminGet } from "@/lib/admin/client";
@@ -110,21 +110,26 @@ export function useAppointmentsChanged(callback: () => void) {
  * 只看见一个 —— 结果两个实例都在跑，各自请求一次聚合接口并开一条 Realtime
  * 订阅。用本 hook 决定「挂哪一个」后，任何时刻只有一个实例存在。
  *
- * 首帧返回 false：服务端渲染拿不到视口宽度，若默认 true，窄屏会在水合前
- * 闪出一次侧边栏布局。默认 false 让首帧偏保守，水合后立即纠正。
+ * 用 useSyncExternalStore 而非 useEffect + setState：matchMedia 就是一个
+ * 外部订阅源，正是这个 API 的适用场景 —— 它能在首次渲染就给出正确值，
+ * 不会像 effect 那样先渲染一遍旧值再纠正（那会造成闪烁与多余渲染）。
+ *
+ * 服务端快照固定返回 false：服务端拿不到视口宽度。默认 false 让首帧偏保守
+ * （渲染手机布局），客户端水合后立即纠正为真实值。
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    },
+    [query]
+  );
 
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    setMatches(mql.matches);
-    const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [query]);
+  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query]);
 
-  return matches;
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
 /**
@@ -144,6 +149,7 @@ export function usePendingCount(): number | null {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 该规则不追踪 async 边界：下面调用的 load() 首个动作就是 await 网络请求，setState 发生在 await 之后，非同步级联渲染。
     void load();
   }, [load]);
 
@@ -239,14 +245,20 @@ function readSeenAt(): number {
  */
 export function useInbox(): InboxState {
   const [items, setItems] = useState<InboxItem[]>([]);
-  const [unread, setUnread] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 已读游标放进 state：markSeen 更新它之后要立刻重算未读条数，
-  // 只写 localStorage 不会触发重渲染，角标会停在旧数字上。
+  /**
+   * 已读游标放进 state：markSeen 更新它之后要立刻重算未读条数，
+   * 只写 localStorage 不会触发重渲染，角标会停在旧数字上。
+   *
+   * **必须留在 effect 里，不能用惰性初始化器**：服务端无 window → 读到 0，
+   * 客户端读到用户真实存过的游标值，两者不同 → 水合不匹配（React #418）。
+   * 这与 login-form 是同一个坑，两处都实测踩过。
+   */
   const [seenAt, setSeenAt] = useState(0);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage 只能在客户端读；放进惰性初始化器会水合失败（React #418）
     setSeenAt(readSeenAt());
   }, []);
 
@@ -322,13 +334,21 @@ export function useInbox(): InboxState {
     setLoading(false);
   }, []);
 
-  // 未读条数随「事项列表」与「已读游标」一起算，避免两处各自维护导致角标打架
-  useEffect(() => {
-    if (loading) return;
-    setUnread(items.filter((i) => isUnread(i, seenAt)).length);
-  }, [items, seenAt, loading]);
+  /**
+   * 未读条数是**派生值**，直接用 useMemo 算，不放进 effect + setState。
+   *
+   * 原先写成 useEffect(() => { if (!loading) setUnread(count) }, [items, seenAt, loading])：
+   * 那会多跑一轮渲染（items 变了 → 渲染 → effect 里 setUnread → 再渲染），
+   * 而且中间那一帧角标数字是旧的。派生状态就该在渲染期算出来。
+   * loading 期间返回 null（而不是 0），让角标不渲染数字而非显示错误的 0。
+   */
+  const unread = useMemo(
+    () => (loading ? null : items.filter((i) => isUnread(i, seenAt)).length),
+    [items, seenAt, loading]
+  );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 该规则不追踪 async 边界：下面调用的 load() 首个动作就是 await 网络请求，setState 发生在 await 之后，非同步级联渲染。
     void load();
   }, [load]);
 

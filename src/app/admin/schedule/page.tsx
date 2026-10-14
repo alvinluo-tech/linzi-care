@@ -38,9 +38,18 @@ import type { Schedules, Staff } from "@/lib/types";
 export default function AdminSchedulePage() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [staffId, setStaffId] = useState<string>("");
-  // 周起点在挂载后初始化（预渲染期不能调用 new Date()）
+  /**
+   * 周起点在挂载后初始化：**预渲染期不能调用 new Date()**。
+   * 服务端在构建时求值（得到构建那天的周一），客户端得到运行时的周一，
+   * 两者不同 → 水合不匹配（React #418）。实测改成惰性初始化后确实报错。
+   */
   const [weekStart, setWeekStart] = useState<Date | null>(null);
   const [schedules, setSchedules] = useState<Schedules[] | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 不能在渲染期读 new Date()（服务端/客户端取值不同会水合失败），只能挂载后写入
+    setWeekStart(storeWeekStartMonday(new Date()));
+  }, []);
 
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState("");
@@ -60,10 +69,6 @@ export default function AdminSchedulePage() {
     () => (weekStart ? addDays(weekStart, 7) : null),
     [weekStart]
   );
-
-  useEffect(() => {
-    setWeekStart(storeWeekStartMonday(new Date()));
-  }, []);
 
   const load = useCallback(async () => {
     // 先加载技师列表（含未选择技师时的默认选中），再按需加载该周排班。
@@ -99,6 +104,7 @@ export default function AdminSchedulePage() {
   }, [staffId, weekStart, weekEnd]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 该规则不追踪 async 边界：下面调用的 load() 首个动作就是 await 网络请求，setState 发生在 await 之后，非同步级联渲染。
     void load();
   }, [load]);
 

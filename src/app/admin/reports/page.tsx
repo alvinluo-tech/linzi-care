@@ -21,7 +21,6 @@ import {
   Users,
   CheckCircle2,
   CalendarCheck2,
-  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -66,18 +65,34 @@ const STATUS_LABELS: Record<string, string> = {
   no_show: "未到店",
 };
 
+/**
+ * 报表默认区间：本月 1 号 → 今天（门店时区）。
+ *
+ * **不能在渲染期调用**：服务端在构建时求值、客户端在运行时求值，跨天/跨月
+ * 就会不一致（水合失败 React #418）。也不是"本页没有预渲染价值"就能豁免——
+ * Next 仍会为它生成静态外壳。所以初值留空，挂载后再填。
+ */
+function defaultRange() {
+  const now = new Date();
+  return { from: storeDateKey(now).slice(0, 7) + "-01", to: storeDateKey(now) };
+}
+
 export default function AdminReportsPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [data, setData] = useState<ReportData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // 图表（recharts）必须等客户端挂载后再渲染，否则 SSR 与客户端输出不一致。
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // 这一处两件事都只能在客户端做：读 new Date()、以及给图表一个"可以画了"的信号。
+    /* eslint-disable react-hooks/set-state-in-effect -- 日期默认值含 new Date()，渲染期取值会水合失败；mounted 是图表挂载信号。二者都只能在 effect 内完成 */
+    const range = defaultRange();
+    setFrom(range.from);
+    setTo(range.to);
     setMounted(true);
-    const now = new Date();
-    setFrom(storeDateKey(now).slice(0, 7) + "-01");
-    setTo(storeDateKey(now));
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const load = useCallback(async () => {
@@ -121,6 +136,7 @@ export default function AdminReportsPage() {
   }, [from, to]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 该规则不追踪 async 边界：下面调用的 load() 首个动作就是 await 网络请求，setState 发生在 await 之后，非同步级联渲染。
     void load();
   }, [load]);
 

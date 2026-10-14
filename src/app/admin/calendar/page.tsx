@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { CalendarPlus, Filter, CalendarCheck, Sparkles, AlertTriangle } from "lucide-react";
+import { CalendarPlus, Filter, CalendarCheck, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -82,6 +82,7 @@ export default function AdminCalendarPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 该规则不追踪 async 边界：下面调用的 load() 首个动作就是 await 网络请求，setState 发生在 await 之后，非同步级联渲染。
     void load();
   }, [load]);
 

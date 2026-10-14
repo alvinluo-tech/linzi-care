@@ -47,14 +47,27 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  /**
+   * 历史账号与「保持登录」偏好来自 localStorage。
+   *
+   * **必须留在 effect 里，不能用惰性初始化器**：服务端读到的是默认值
+   * （无 window → [] 与 true），而客户端读到的可能是用户真实存过的值
+   * （例如上次登录取消勾选「保持登录」，localStorage 里就是 "0"）。
+   * 两者不同 → 服务端 HTML 与客户端首帧不一致 → React #418 水合失败。
+   * 这个坑实测踩过：改成惰性初始化后 01-access 的多角色跳转用例稳定报 #418。
+   *
+   * 代价是「芯片首帧为空、下一帧出现」的轻微抖动，但正确性优先。
+   */
   const [keepLogin, setKeepLoginState] = useState(true);
   const [accounts, setAccounts] = useState<RememberedAccount[]>([]);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  // 历史账号与「保持登录」偏好只在客户端读取（避免预渲染期访问 localStorage）
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- localStorage 只能在客户端读；放进惰性初始化器会导致服务端/客户端首帧不一致（实测 React #418） */
     setAccounts(loadRememberedAccounts());
     setKeepLoginState(getKeepLogin());
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const toggleKeepLogin = (next: boolean) => {

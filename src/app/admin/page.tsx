@@ -59,12 +59,19 @@ export default function AdminDashboardPage() {
   const [selected, setSelected] = useState<AppointmentWithRefs | null>(null);
   const [newOpen, setNewOpen] = useState(false);
 
-  // 「3 分钟前」这类相对时间必须自己走，否则老板开着页面不动，标签会停在
-  // 打开那一刻的数字上 —— 半小时后还写着「刚刚」，反倒比不显示更误导。
-  // 空值初始化：无参 new Date() 在预渲染期是 unstable value（会报 Date.now()）。
+  /**
+   * 「3 分钟前」这类相对时间必须自己走，否则老板开着页面不动，标签会停在
+   * 打开那一刻的数字上 —— 半小时后还写着「刚刚」，反倒比不显示更误导。
+   *
+   * 初值必须是 null 而不是 Date.now()：渲染期取"现在"会让服务端（构建时刻）
+   * 与客户端（运行时刻）算出不同的相对时间文案 → 水合不匹配（React #418）。
+   * 所以空值初始化，挂载后才开始计时。
+   */
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- 渲染期不能读 Date.now()（服务端/客户端取值不同会水合失败），只能挂载后写入 */
     setNow(Date.now());
+    /* eslint-enable react-hooks/set-state-in-effect */
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
@@ -156,6 +163,7 @@ export default function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 该规则不追踪 async 边界：下面调用的 load() 首个动作就是 await 网络请求，setState 发生在 await 之后，非同步级联渲染。
     void load();
   }, [load]);
 

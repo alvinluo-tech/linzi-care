@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AppointmentDialog } from "@/components/admin/appointment-dialog";
-import { useInbox, type InboxItem, type InboxState } from "@/lib/hooks";
+import { type InboxItem, type InboxState } from "@/lib/hooks";
 import { adminGet } from "@/lib/admin/client";
 import type { AppointmentWithRefs } from "@/lib/types";
 import { cn } from "@/lib/utils";

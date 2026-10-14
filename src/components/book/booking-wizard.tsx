@@ -96,11 +96,16 @@ export function BookingWizard() {
     const preService = searchParams.get("service");
     const draft = restoreDraft();
     const initial: Draft = preService ? { ...draft, serviceId: preService } : draft;
+    // 草稿来自 sessionStorage、深链来自 searchParams，两者服务端都拿不到；
+    // 改成惰性初始化会让服务端与客户端首帧不一致（水合报错），故必须留在
+    // effect 里同步回填。这是一次性的"从外部存储恢复状态"，rule 不适用。
+    /* eslint-disable react-hooks/set-state-in-effect -- 从 sessionStorage/searchParams 恢复草稿，服务端无此数据，只能挂载后同步回填 */
     if (initial.serviceId) setServiceId(initial.serviceId);
     if (initial.staffId) setStaffId(initial.staffId);
     if (initial.date) setDate(initial.date);
     if (initial.slot) setSlot(initial.slot);
     if (initial.remark) setRemark(initial.remark);
+    /* eslint-enable react-hooks/set-state-in-effect */
     // 只有显式带 ?service= 才触发定位滚动；从草稿恢复时不打扰用户
     if (preService) setDeepLinkServiceId(preService);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,6 +186,9 @@ export function BookingWizard() {
 
   useEffect(() => {
     if (!member || !serviceId) {
+      // 清空是"依赖已不成立"的同步收尾：没有会员或没选项目就不该展示次卡，
+      // 等一帧再清会短暂显示不属于当前选择的次卡。
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 依赖失效即清空，避免残留上一个选择的次卡
       setPasses([]);
       return;
     }
@@ -238,17 +246,29 @@ export function BookingWizard() {
     [staffList, staffId]
   );
 
+  /**
+   * 可选日期 = 今天起 BOOKING_DAYS_AHEAD 天。
+   *
+   * **不能在渲染期计算**：`new Date()` 在服务端（构建时刻）与客户端（访问时刻）
+   * 会得出不同的「今天」，日期条内容随之不同 → 水合不匹配（React #418）。
+   * 这是本项目第三次踩到同一个坑（login-form 的 localStorage、schedule 的周一）。
+   * 所以留空，挂载后填充。
+   */
   const [dateOptions, setDateOptions] = useState<Date[]>([]);
   useEffect(() => {
-    const today = new Date();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 渲染期不能读 new Date()，只能挂载后写入
     setDateOptions(
-      Array.from({ length: BOOKING_DAYS_AHEAD }, (_, i) => addDays(today, i))
+      Array.from({ length: BOOKING_DAYS_AHEAD }, (_, i) => addDays(new Date(), i))
     );
   }, []);
 
   useEffect(() => {
     if (!serviceId || !staffId || !date) return;
     let cancelled = false;
+    // 这里同步置 loading 是刻意的：日期一变就要立刻显示骨架，否则会先闪一帧
+    // 上一个日期的旧时段（错误信息），再跳成新时段。规则针对的是"无谓的级联
+    // 渲染"，此处是"依赖变更 → 进入加载态"的正当同步操作。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 依赖变更即进入加载态，需同步置位以避免闪现旧时段
     setSlotsLoading(true);
     setSlots(null);
     q(() =>

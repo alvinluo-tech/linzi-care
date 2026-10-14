@@ -69,6 +69,8 @@ export function NewAppointmentDialog({
 
   useEffect(() => {
     if (!open) return;
+    // 打开弹窗即进入加载态：等一帧会让会员/项目下拉框先空一瞬。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 打开弹窗即进入加载态，需同步置位避免空下拉框闪现
     setLoading(true);
     const supabase = createClient();
     Promise.all([
@@ -95,6 +97,9 @@ export function NewAppointmentDialog({
 
   useEffect(() => {
     if (!open) {
+      // 关闭时重置表单：让下次打开是干净状态。这是"依赖失效即复位"的
+      // 同步收尾，延后一帧会让已关闭的弹窗残留上次的选项。
+      /* eslint-disable react-hooks/set-state-in-effect -- 弹窗关闭即复位表单，避免残留上次选择 */
       setMemberId("");
       setMemberFilter("");
       setServiceId("");
@@ -107,6 +112,7 @@ export function NewAppointmentDialog({
       setDate(defKey);
       setMinDate(storeDateKey(today));
       setMaxDate(storeDateKey(addDays(today, 60)));
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -131,8 +137,12 @@ export function NewAppointmentDialog({
   useEffect(() => {
     if (!serviceId || !staffId || !date || !open) return;
     let cancelled = false;
+    // 项目/技师/日期一变立刻进加载态并清空已选时段：延后一帧会先闪出
+    // 上一组条件下的旧时段（可能并不合法），引导错误点击。
+    /* eslint-disable react-hooks/set-state-in-effect -- 依赖变更即进入加载态并清空旧时段，避免闪现不合法选项 */
     setSlotsLoading(true);
     setSlot("");
+    /* eslint-enable react-hooks/set-state-in-effect */
     void Promise.resolve(
       createClient().rpc("get_available_slots", {
         p_staff_id: staffId,

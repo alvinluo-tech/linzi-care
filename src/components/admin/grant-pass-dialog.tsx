@@ -54,6 +54,8 @@ export function GrantPassDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    // 弹窗一打开就要显示加载态：等一帧会让用户先看到空的项目下拉框。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 打开弹窗即进入加载态，需同步置位避免空下拉框闪现
     setLoading(true);
     q(() =>
       createClient().from("services").select("*").order("sort_order")
