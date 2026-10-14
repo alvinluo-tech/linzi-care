@@ -4,9 +4,14 @@ import { requireAdmin } from "@/lib/admin/dal";
 
 /**
  * GET /api/admin/appointment?id=<uuid>
- * 单条预约详情（含 members / staff / services 名称）。
- * RealtimeNotifier 收到新预约推送后据此组装提示文案 —— 走服务端可确保
- * 客户名不因客户端非 admin 会话被 RLS 静默置空（那样会提示「会员」）。
+ * 单条预约详情，字段与 /appointments 列表一致（AppointmentWithRefs）。
+ *
+ * 两个消费者：
+ * 1. RealtimeNotifier 收到新预约推送后组装提示文案；
+ * 2. 通知中心「点开直接办」—— 据此打开 AppointmentDialog 处理该单。
+ *
+ * 都必须走服务端：客户端若持非 admin 会话，members 的内嵌关联会被 RLS
+ * 静默置空，提示与弹窗就变成「匿名客户」。
  */
 export async function GET(request: Request) {
   const check = await requireAdmin();
@@ -22,7 +27,9 @@ export async function GET(request: Request) {
 
   const { data, error } = await check.supabase
     .from("appointments")
-    .select("start_time, members(name), staff(name), services(name)")
+    .select(
+      "*, members(id, name, phone), staff(id, name, title), services(id, name, duration, price, member_price)"
+    )
     .eq("id", id)
     .maybeSingle();
 

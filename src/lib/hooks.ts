@@ -103,6 +103,31 @@ export function useAppointmentsChanged(callback: () => void) {
 }
 
 /**
+ * 响应式媒体查询，用于「同一个组件要在不同断点挂到不同容器」的场景。
+ *
+ * 为什么不直接用 CSS 的 `hidden md:flex`：CSS 隐藏的元素**依然会挂载**。
+ * 管理端的通知铃铛原先把同一份组件放在侧边栏与手机顶栏两处，靠 CSS 保证
+ * 只看见一个 —— 结果两个实例都在跑，各自请求一次聚合接口并开一条 Realtime
+ * 订阅。用本 hook 决定「挂哪一个」后，任何时刻只有一个实例存在。
+ *
+ * 首帧返回 false：服务端渲染拿不到视口宽度，若默认 true，窄屏会在水合前
+ * 闪出一次侧边栏布局。默认 false 让首帧偏保守，水合后立即纠正。
+ */
+export function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    setMatches(mql.matches);
+    const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+
+  return matches;
+}
+
+/**
  * 待确认预约的实时计数（导航角标用）。
  * 数据源与 RealtimeNotifier 的广播事件复用同一条链路：任何 INSERT/UPDATE/DELETE
  * 都会触发刷新，因此无需再开一条 Realtime 订阅。
@@ -160,6 +185,8 @@ export interface InboxItem {
   /** 用于判断是否「新」：该事项的产生时间 */
   at: string;
   href: string;
+  /** 关联的预约单号（若有）。供「点开直接办」定位到具体那一单。 */
+  appointmentId: string | null;
 }
 
 export interface InboxState {
@@ -167,10 +194,32 @@ export interface InboxState {
   /** 未读条数（at > lastSeenAt）；null 表示还没算出来 */
   unread: number | null;
   loading: boolean;
-  markAllSeen: () => void;
+  /**
+   * 把「看过就算」的事项标记为已读。
+   * 待确认预约是「办完才算」，不在此列 —— 见 SEENABLE_KINDS 的注释。
+   */
+  markSeen: () => void;
+  /** 立即重取待办列表。在通知中心里就地办完一单后调用，让该条立刻消失。 */
+  refresh: () => void;
 }
 
 const INBOX_SEEN_KEY = "linzi:inbox-seen-at";
+
+/**
+ * 未读的判定分两类，这是通知中心最关键的一条规则：
+ *
+ * - `pending`（待确认预约）**永远算未读**，与「看没看过」无关。它只在老板
+ *   真正办完（确认/取消）后，因离开 pending 状态而从数据源消失，才自然归零。
+ *   若让「打开面板」把它标成已读，老板瞟一眼、没接单，这单就再也不会提醒
+ *   —— 而它是唯一有时效性、漏掉会直接伤到顾客体验的一类。
+ *
+ * - 其余两类（今日到店、投递失败）看过就算：老板知道就行，不会再因为
+ *   「没看」产生后果，用 localStorage 游标记住上次看到的时间即可。
+ */
+function isUnread(item: InboxItem, seenAt: number): boolean {
+  if (item.kind === "pending") return true;
+  return new Date(item.at).getTime() > seenAt;
+}
 
 function readSeenAt(): number {
   if (typeof window === "undefined") return 0;
@@ -192,6 +241,14 @@ export function useInbox(): InboxState {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [unread, setUnread] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // 已读游标放进 state：markSeen 更新它之后要立刻重算未读条数，
+  // 只写 localStorage 不会触发重渲染，角标会停在旧数字上。
+  const [seenAt, setSeenAt] = useState(0);
+
+  useEffect(() => {
+    setSeenAt(readSeenAt());
+  }, []);
 
   const load = useCallback(async () => {
     // 今日门店时区边界
@@ -230,6 +287,7 @@ export function useInbox(): InboxState {
         )}`,
         at: a.created_at ?? a.start_time,
         href: "/admin",
+        appointmentId: a.id,
       });
     }
 
@@ -241,6 +299,7 @@ export function useInbox(): InboxState {
         detail: `顾客可能没收到${n.type === "reminder" ? "到店提醒" : "确认通知"}，建议电话跟进`,
         at: n.created_at,
         href: "/admin",
+        appointmentId: n.appointment_id,
       });
     }
 
@@ -254,15 +313,20 @@ export function useInbox(): InboxState {
         }`,
         at: a.start_time,
         href: "/admin",
+        appointmentId: a.id,
       });
     }
 
     list.sort((x, y) => (x.at < y.at ? 1 : -1));
     setItems(list);
-    const seen = readSeenAt();
-    setUnread(list.filter((i) => new Date(i.at).getTime() > seen).length);
     setLoading(false);
   }, []);
+
+  // 未读条数随「事项列表」与「已读游标」一起算，避免两处各自维护导致角标打架
+  useEffect(() => {
+    if (loading) return;
+    setUnread(items.filter((i) => isUnread(i, seenAt)).length);
+  }, [items, seenAt, loading]);
 
   useEffect(() => {
     void load();
@@ -272,19 +336,21 @@ export function useInbox(): InboxState {
     void load();
   });
 
-  const markAllSeen = useCallback(() => {
+  const markSeen = useCallback(() => {
     if (typeof window === "undefined") return;
-    const newest = items.reduce(
-      (max, i) => Math.max(max, new Date(i.at).getTime()),
-      Date.now()
-    );
+    // 只对「看过就算」的那类推进游标；pending 不参与，见 isUnread 的说明。
+    const newestSeenable = items.reduce((max, i) => {
+      if (i.kind === "pending") return max;
+      return Math.max(max, new Date(i.at).getTime());
+    }, 0);
+    if (newestSeenable === 0) return;
     try {
-      window.localStorage.setItem(INBOX_SEEN_KEY, String(newest));
+      window.localStorage.setItem(INBOX_SEEN_KEY, String(newestSeenable));
     } catch {
       // ignore
     }
-    setUnread(0);
+    setSeenAt(newestSeenable);
   }, [items]);
 
-  return { items, unread, loading, markAllSeen };
+  return { items, unread, loading, markSeen, refresh: () => void load() };
 }

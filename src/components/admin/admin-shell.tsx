@@ -27,7 +27,12 @@ import {
 } from "@/components/ui/sheet";
 import { BrandMark } from "@/components/brand";
 import { NotificationBell } from "@/components/admin/notification-bell";
-import { usePendingCount } from "@/lib/hooks";
+import {
+  usePendingCount,
+  useInbox,
+  useMediaQuery,
+  type InboxState,
+} from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { STORE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -47,10 +52,33 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pendingCount = usePendingCount();
 
+  /**
+   * 通知中心的数据在这里取一次，两个铃铛位置共用。
+   *
+   * 之前 SideContent 与顶栏各挂一个 <NotificationBell />，各自跑一份
+   * useInbox —— 实测每次进入管理页会打两次 /api/admin/inbox（含三段聚合
+   * 子查询）并开两条 Realtime 订阅，而其中一份永远藏在 CSS 后面看不见。
+   * 提到 Shell 层后只剩一份请求。
+   */
+  const inbox = useInbox();
+
+  /**
+   * 铃铛到底画在哪一个容器里，由「侧边栏此刻是否真的可见」决定。
+   *
+   * 不能只靠 `hidden md:flex`：CSS 隐藏的元素**依然会挂载**，于是侧边栏
+   * 与手机顶栏各渲染一个铃铛，DOM 里始终有两个（实测）。用 media query
+   * 决定挂载位置后，任何时刻只有一个铃铛实例存在。
+   * md 断点与 globals/tailwind 的默认一致（≥768px 显示侧边栏）。
+   */
+  const showSidebarBell = useMediaQuery("(min-width: 768px)");
+
   return (
     <div className="min-h-svh">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <SideContent pendingCount={pendingCount} />
+        <SideContent
+          pendingCount={pendingCount}
+          inbox={showSidebarBell ? inbox : undefined}
+        />
       </aside>
 
       <div className="flex min-h-svh min-w-0 flex-col md:pl-60">
@@ -68,6 +96,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <SheetHeader className="sr-only">
                 <SheetTitle>管理端导航</SheetTitle>
               </SheetHeader>
+              {/* 抽屉是手机端的覆盖层，铃铛由顶栏承担（见 showSidebarBell），
+                  这里恒不渲染，避免同一时刻存在两个铃铛实例 */}
               <SideContent
                 pendingCount={pendingCount}
                 onNavigate={() => setMobileOpen(false)}
@@ -90,7 +120,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 {pendingCount} 单待接
               </Link>
             )}
-            <NotificationBell />
+            {!showSidebarBell && <NotificationBell inbox={inbox} />}
           </div>
         </header>
 
@@ -103,9 +133,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 function SideContent({
   onNavigate,
   pendingCount,
+  inbox,
 }: {
   onNavigate?: () => void;
   pendingCount: number | null;
+  /** 桌面侧边栏需要铃铛；手机抽屉里不传（顶栏已有一个，避免重复入口） */
+  inbox?: InboxState;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -129,7 +162,7 @@ function SideContent({
           </p>
         </div>
         <div className="ml-auto">
-          <NotificationBell />
+          {inbox && <NotificationBell inbox={inbox} />}
         </div>
       </div>
 
