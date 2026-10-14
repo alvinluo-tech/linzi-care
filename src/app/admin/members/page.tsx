@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, History, Plus, Ticket, UserPlus, Wallet } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { History, Plus, Ticket, UserPlus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { DataTable } from "@/components/ui/data-table";
 import { AccountActions } from "@/components/admin/account-actions";
+import { useMemberColumns } from "@/components/admin/member-columns";
+import { BalanceAdjustDialog } from "@/components/admin/balance-adjust-dialog";
 import { CredentialsDialog } from "@/components/credentials-dialog";
 import { GrantPassDialog } from "@/components/admin/grant-pass-dialog";
 import { invokeFunction } from "@/lib/functions";
@@ -28,8 +29,6 @@ import { mutate } from "@/lib/supabase/query";
 import { formatCNY, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BalanceLogs, Members } from "@/lib/types";
-
-const REASONS = ["充值入账", "消费核销", "活动赠送", "退款", "老板手动调整"];
 
 interface CreateResult {
   email: string;
@@ -45,9 +44,6 @@ export default function AdminMembersPage() {
 
   // 余额调整
   const [balanceTarget, setBalanceTarget] = useState<Members | null>(null);
-  const [balanceMode, setBalanceMode] = useState<"set" | "delta">("set");
-  const [balanceAmount, setBalanceAmount] = useState("");
-  const [balanceReason, setBalanceReason] = useState(REASONS[0]);
 
   // 余额记录
   const [logsTarget, setLogsTarget] = useState<Members | null>(null);
@@ -105,46 +101,6 @@ export default function AdminMembersPage() {
     }
   };
 
-  const submitBalance = async () => {
-    if (!balanceTarget) return;
-    const amount = Number(balanceAmount);
-    // Number("Infinity")/Number("1e309") 都不是 NaN，能骗过 isNaN 检查并让预览渲染成 ¥Infinity。
-    // 用 isFinite 收口，并加上合理上界（余额是钱，不允许六位以上乱填）。
-    if (!Number.isFinite(amount) || amount === 0) {
-      toast.error("请输入有效的金额");
-      return;
-    }
-    if (Math.abs(amount) > 1_000_000) {
-      toast.error("单次调整金额不能超过 ¥1,000,000");
-      return;
-    }
-    const final =
-      balanceMode === "set" ? amount : Number(balanceTarget.balance) + amount;
-    if (!Number.isFinite(final) || final < 0) {
-      toast.error("调整后余额不能为负数");
-      return;
-    }
-    setSubmitting(true);
-    const { error } = await mutate(() =>
-      createClient().rpc("admin_update_balance", {
-        p_member_id: balanceTarget.id,
-        p_new_balance: final,
-        p_reason: balanceReason,
-      })
-    );
-    setSubmitting(false);
-    if (error) {
-      toast.error("调整失败", { description: error.message });
-      return;
-    }
-    // 必须等刷新完成再关弹窗：余额调整是「改了钱就要看见新数字」的操作，
-    // 先关窗再异步取数会让用户（和自动化测试）读到上一轮的旧余额。
-    await load();
-    toast.success("余额已更新，变动已记录");
-    setBalanceTarget(null);
-    setBalanceAmount("");
-  };
-
   const openLogs = async (member: Members) => {
     const req = ++logsReqRef.current;
     setLogsTarget(member);
@@ -188,155 +144,13 @@ export default function AdminMembersPage() {
   };
 
   // TanStack Table 列配置
-  const columns = useMemo<ColumnDef<Members>[]>(
-    () => [
-      {
-        accessorKey: "name",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-3 h-8 text-xs font-serif font-medium text-bark-800"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            会员尊称
-            <ArrowUpDown className="ml-1 size-3 text-bark-400" />
-          </Button>
-        ),
-        cell: ({ row }) => {
-          const m = row.original;
-          return (
-            <div>
-              <p className="font-serif font-medium text-bark-800">{m.name}</p>
-              <p className="text-[11px] text-bark-400">
-                {m.note ? m.note : formatDateTime(m.created_at) + " 入籍"}
-              </p>
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: "phone",
-        header: "联系电话 / 登录账号",
-        cell: ({ row }) => {
-          const m = row.original;
-          return (
-            <div className="text-xs">
-              <p className="font-medium text-bark-700">{m.phone ?? "未留手机"}</p>
-              <p className="font-mono text-[11px] text-bark-400">{m.email ?? ""}</p>
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: "balance",
-        header: ({ column }) => (
-          <div className="text-right">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="-mr-3 h-8 text-xs font-serif font-medium text-bark-800"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            >
-              账户余额
-              <ArrowUpDown className="ml-1 size-3 text-bark-400" />
-            </Button>
-          </div>
-        ),
-        cell: ({ row }) => (
-          <div className="text-right">
-            <span className="font-serif text-base font-semibold text-bronze-700">
-              {formatCNY(row.original.balance)}
-            </span>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "is_active",
-        header: "会籍状态",
-        cell: ({ row }) => {
-          const active = row.original.is_active;
-          return (
-            <span
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide",
-                active
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-stone-300 bg-stone-100 text-stone-500"
-              )}
-            >
-              {active ? "正籍有效" : "休眠停用"}
-            </span>
-          );
-        },
-      },
-      {
-        id: "actions",
-        header: () => <div className="text-right">操作手令</div>,
-        cell: ({ row }) => {
-          const m = row.original;
-          return (
-            <div className="flex flex-wrap items-center justify-end gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-bronze-700 hover:bg-bronze-50"
-                onClick={() => {
-                  setBalanceTarget(m);
-                  setBalanceMode("set");
-                  setBalanceAmount(String(m.balance));
-                }}
-              >
-                <Wallet className="mr-1 size-3 text-bronze-600" /> 调余额
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-bark-600 hover:bg-secondary"
-                onClick={() => void openLogs(m)}
-              >
-                <History className="mr-1 size-3 text-bark-400" /> 变动流水
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-bark-600 hover:bg-secondary"
-                onClick={() => setPassTarget(m)}
-              >
-                <Ticket className="size-3" />
-                权益
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs text-bark-600 hover:bg-secondary"
-                onClick={() => setEditing(m)}
-              >
-                编辑
-              </Button>
-              <AccountActions
-                userId={m.user_id}
-                email={m.email}
-                active={m.is_active}
-                name={m.name}
-                onToggleBusiness={async (active) => {
-                  const { error } = await mutate(() =>
-                    createClient()
-                      .from("members")
-                      .update({ is_active: active })
-                      .eq("id", m.id)
-                  );
-                  if (error) throw new Error(error.message);
-                }}
-                onChanged={() => void load()}
-              />
-            </div>
-          );
-        },
-      },
-    ],
-    [load]
-  );
+  const columns = useMemberColumns({
+    onAdjustBalance: (m) => setBalanceTarget(m),
+    onOpenLogs: (m) => void openLogs(m),
+    onOpenPasses: (m) => setPassTarget(m),
+    onEdit: (m) => setEditing(m),
+    onChanged: () => void load(),
+  });
 
   return (
     <div className="space-y-6">
@@ -413,11 +227,7 @@ export default function AdminMembersPage() {
                   variant="outline"
                   size="sm"
                   className="h-8 flex-1 basis-[calc(50%-0.375rem)] text-xs text-bronze-700"
-                  onClick={() => {
-                    setBalanceTarget(m);
-                    setBalanceMode("set");
-                    setBalanceAmount(String(m.balance));
-                  }}
+                  onClick={() => setBalanceTarget(m)}
                 >
                   <Wallet className="mr-1 size-3 text-bronze-600" /> 调余额
                 </Button>
@@ -539,106 +349,11 @@ export default function AdminMembersPage() {
       </Dialog>
 
       {/* 调整余额 */}
-      <Dialog
-        open={Boolean(balanceTarget)}
+      <BalanceAdjustDialog
+        member={balanceTarget}
         onOpenChange={(o) => !o && setBalanceTarget(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-serif">手动调整会员余额</DialogTitle>
-            <DialogDescription>
-              {balanceTarget?.name} 当前账户结余{" "}
-              {formatCNY(balanceTarget?.balance ?? 0)}，本次调整将永久记入审计流水。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  { key: "set", label: "设为指定金额" },
-                  { key: "delta", label: "增减变动差额" },
-                ] as const
-              ).map((m) => (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => {
-                    setBalanceMode(m.key);
-                    setBalanceAmount(
-                      m.key === "set" ? String(balanceTarget?.balance ?? 0) : ""
-                    );
-                  }}
-                  className={cn(
-                    "rounded-md border px-3 py-2 text-xs transition-colors",
-                    balanceMode === m.key
-                      ? "border-bronze-500 bg-bronze-50 font-medium text-bronze-800"
-                      : "border-border text-bark-600"
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                {balanceMode === "set" ? "调整后新余额（元）" : "变动金额（正数充值，负数核销）"}
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={balanceAmount}
-                onChange={(e) => setBalanceAmount(e.target.value)}
-                className="h-9 text-xs"
-              />
-              <p className="text-[11px] text-bark-400">
-                生效后结余：{" "}
-                <strong className="text-bronze-700">
-                  {formatCNY(
-                    Number.isNaN(Number(balanceAmount))
-                      ? 0
-                      : balanceMode === "set"
-                      ? Number(balanceAmount)
-                      : Number(balanceTarget?.balance ?? 0) + Number(balanceAmount)
-                  )}
-                </strong>
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">变更款项事由</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {REASONS.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setBalanceReason(r)}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
-                      balanceReason === r
-                        ? "border-bronze-500 bg-bronze-500 text-white"
-                        : "border-border text-bark-500 hover:border-bronze-300"
-                    )}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setBalanceTarget(null)}>
-              取消
-            </Button>
-            <Button
-              onClick={submitBalance}
-              size="sm"
-              disabled={submitting || balanceAmount === ""}
-              className="bg-bronze-500 text-white hover:bg-bronze-600"
-            >
-              {submitting ? "提交中…" : "确认入账"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onAdjusted={load}
+      />
 
       {/* 余额变动记录 */}
       <GrantPassDialog
