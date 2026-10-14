@@ -14,23 +14,17 @@
 /coverage
 /test-results/
 /playwright-report/
-# 浏览器点击层测试：**不想入库**，但不该被"忽略"。
+# 浏览器点击层测试：**已纳入版本控制**（2026-10-14 解禁）。
 #
-# 现状说明：这 14 个 spec 是唯一覆盖真实 UI 点击的资产，价值很高；此前
-# 它们内含硬编码的生产 service_role 与账号口令，只好整目录 ignore。
-# 那些密钥现已全部改为读 .env.local（见 tests/test-env.ts），所以内容是安全的；
-# 仍保留 ignore 只是不想在这一轮里顺带把历史文件一并纳入版本控制 ——
-# 那属于独立的清理动作，需要单独评审。
+# 此前整目录 ignore，因为这些 spec 内含硬编码的生产 service_role 与账号口令。
+# 现在凭据全部改为读 .env.local（tests/test-env.ts），且已逐文件扫描确认无残留。
 #
-# ⚠ 已观察到的实际代价：因为这个 ignore，本轮对 tests/browser/helpers.ts 的
-#   一处真实修复（injectSessionViaApi 漏掉 retry，导致一次代理抖动就让
-#   无关用例整条失败）无法提交，只存在于本机磁盘。这类"改了但进不了版本库"
-#   的改动没有任何机制会提醒你，下次换机器就没了。这一条本身就是尽快把这个
-#   目录纳入版本控制的理由。
+# 代价回顾：ignore 期间，本目录里一处真实修复（injectSessionViaApi 漏 retry，
+# 导致一次代理抖动就让无关用例整条失败）无法提交、只存在于一台机器上 ——
+# 这类"改了但进不了版本库"的改动没有任何机制会提醒你。解禁即为此。
 #
-# 下一步（见 docs/TESTING.md）：确认目录内不再有敏感值后，删掉下面这行并
-# `git add tests/browser/`，让这套测试也纳入版本控制与 CI。
-/tests/browser/
+# 另：目录内写死的项目 ref 也已清除（改用从 SUPABASE_URL 推导的
+# AUTH_STORAGE_KEY），这样换分支库跑测试时不会静默失效。
 
 # next.js
 /.next/
