@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
@@ -110,11 +112,12 @@ export default function ShopPage() {
                   {/* 展品大图视窗 */}
                   <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-gradient-to-br from-bark-100/60 via-paper to-bronze-100/50">
                     {product.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={product.image_url}
                         alt={product.name}
-                        className="size-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        className="object-cover transition-transform duration-700 group-hover:scale-105"
                       />
                     ) : (
                       <div className="flex size-full items-center justify-center">

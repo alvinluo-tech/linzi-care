@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Edit, FolderPlus, Plus, ShoppingBag, Trash2 } from "lucide-react";
@@ -267,10 +269,15 @@ export default function AdminProductsPage() {
           renderMobileCard={(p) => (
             <div className="space-y-3">
               <div className="flex items-start gap-3">
-                <div className="size-11 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-gradient-to-br from-bark-100 to-bronze-100 shadow-2xs">
+                <div className="relative size-11 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-gradient-to-br from-bark-100 to-bronze-100 shadow-2xs">
                   {p.image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image_url} alt={p.name} className="size-full object-cover" />
+                    <Image
+                      src={p.image_url}
+                      alt={p.name}
+                      fill
+                      sizes="44px"
+                      className="object-cover"
+                    />
                   ) : (
                     <span className="flex size-full items-center justify-center font-serif text-sm text-bark-400">
                       {p.name.slice(0, 1)}

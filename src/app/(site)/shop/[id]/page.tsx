@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -90,11 +92,13 @@ function ProductDetail() {
         <div className="relative aspect-square overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-bark-100/70 via-paper to-bronze-100/60 p-2 shadow-sm">
           <div className="relative size-full overflow-hidden rounded-xl bg-card">
             {product.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={product.image_url}
                 alt={product.name}
-                className="size-full object-cover"
+                fill
+                sizes="(max-width: 1024px) 100vw, 480px"
+                priority
+                className="object-cover"
               />
             ) : (
               <div className="flex size-full items-center justify-center">

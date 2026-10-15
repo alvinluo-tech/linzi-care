@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,17 +43,14 @@ export function productColumns(
         const p = row.original;
         return (
           <div className="flex items-center gap-3">
-            <div className="size-11 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-gradient-to-br from-bark-100 to-bronze-100 shadow-2xs">
+            <div className="relative size-11 shrink-0 overflow-hidden rounded-lg border border-border/80 bg-gradient-to-br from-bark-100 to-bronze-100 shadow-2xs">
               {p.image_url ? (
-                // 商品图来自后台填写的任意外链，无法预知域名，
-                // 用原生 img 避免为 next/image 维护一份远程域名白名单。
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={p.image_url}
                   alt={p.name}
-                  className="size-full object-cover"
-                  loading="lazy"
-                  decoding="async"
+                  fill
+                  sizes="44px"
+                  className="object-cover"
                 />
               ) : (
                 <span className="flex size-full items-center justify-center font-serif text-sm text-bark-400">

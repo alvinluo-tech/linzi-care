@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, MapPin } from "lucide-react";
@@ -436,11 +438,12 @@ export default function HomePage() {
                     <Link href={`/shop/${product.id}`} className="group block">
                       <div className="relative aspect-[4/5] overflow-hidden rounded-xl border border-border bg-gradient-to-br from-bark-100 via-card to-bronze-100">
                         {product.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <Image
                             src={product.image_url}
                             alt={product.name}
-                            className="size-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+                            fill
+                            sizes="(max-width: 640px) 50vw, 25vw"
+                            className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
                           />
                         ) : (
                           <div className="flex size-full items-center justify-center">
