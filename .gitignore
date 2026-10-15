@@ -28,6 +28,9 @@
 
 # next.js
 /.next/
+# 备用构建目录（见 next.config.ts 里 NEXT_DIST_DIR 的说明：Windows 上 .next
+# 有时会残留删不掉的目录，需换目录重建）。含尾随空格的畸形名一并覆盖。
+/.next-*/
 /out/
 
 # production

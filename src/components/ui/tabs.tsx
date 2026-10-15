@@ -82,10 +82,16 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      // tabpanel 带 tabindex=0（Radix 的行为，便于键盘直接跳到面板内容），
+      // 但它是 outline-none 的 —— Tab 进去后没有任何视觉反馈。
+      // 补一个只在键盘聚焦时出现的焦点环（:focus-visible 不含鼠标点击）。
+      className={cn(
+        "flex-1 rounded-md text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        className
+      )}
       {...props}
     />
-  )
+  );
 }
 
 export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants }
