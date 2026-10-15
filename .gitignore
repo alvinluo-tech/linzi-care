@@ -36,6 +36,11 @@
 # production
 /build
 
+# 数据库备份快照（见 scripts/db-backup.mts）
+# 里面是会员手机号等个人信息，**绝不能提交**。
+/backups/
+/.roundtrip/
+
 # misc
 .DS_Store
 *.pem

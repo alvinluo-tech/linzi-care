@@ -12,6 +12,12 @@
     "test:guard": "tsx scripts/verify-test-guard.mts",
     "scan:secrets": "tsx scripts/scan-secrets.mts",
     "verify:browser-credentials": "tsx scripts/gate-browser-credentials.mts",
+    "a11y:contrast": "tsx scripts/audit-contrast.mts",
+    "a11y:keyboard": "tsx scripts/audit-keyboard.mts",
+    "backup": "tsx scripts/db-backup.mts",
+    "backup:verify": "tsx scripts/db-backup.mts --verify",
+    "restore": "tsx scripts/db-restore.mts",
+    "verify:backup": "tsx scripts/verify-backup-roundtrip.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
