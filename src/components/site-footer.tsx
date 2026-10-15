@@ -37,7 +37,7 @@ export function SiteFooter() {
               <p className="font-serif text-lg tracking-widest">
                 {store?.name ?? STORE_NAME}
               </p>
-              <p className="text-[10px] tracking-[0.3em] text-bark-300">
+              <p className="text-[10px] tracking-[0.3em] text-bark-200">
                 LINZI WELLNESS
               </p>
             </div>
@@ -65,7 +65,7 @@ export function SiteFooter() {
             </p>
           )}
           {!store && (
-            <p className="text-bark-300">门店信息加载中…</p>
+            <p className="text-bark-200">门店信息加载中…</p>
           )}
         </div>
 
@@ -80,7 +80,7 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="border-t border-bark-800">
-        <p className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-bark-300 md:px-6">
+        <p className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-bark-200 md:px-6">
           © 2026 {store?.name ?? STORE_NAME} · 头疗美容养生
         </p>
       </div>

@@ -157,7 +157,8 @@ function SideContent({
         <BrandMark className="size-9 shrink-0 text-bronze-300" />
         <div className="leading-tight">
           <p className="font-serif text-base tracking-widest">{STORE_NAME}</p>
-          <p className="text-[10px] tracking-[0.25em] text-bark-300">
+          {/* 侧栏是深色底，bark-300 在此只有 3.44:1，改用 bark-200 */}
+          <p className="text-[10px] tracking-[0.25em] text-bark-200">
             ADMIN CONSOLE
           </p>
         </div>
@@ -182,7 +183,7 @@ function SideContent({
             <item.icon
               className={cn(
                 "size-4",
-                isActive(item) ? "text-bronze-300" : "text-bark-300"
+                isActive(item) ? "text-bronze-300" : "text-bark-200"
               )}
             />
             {item.label}

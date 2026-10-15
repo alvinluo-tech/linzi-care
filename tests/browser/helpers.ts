@@ -20,7 +20,7 @@ import {
   SUPABASE_URL,
   serviceRoleKey,
 } from "../test-env";
-import { assertIsTestMember, resolveTestMember } from "../test-guard";
+import { assertIsTestMember, resolveTestMember, type TestMember } from "../test-guard";
 
 export { CREDENTIALS, serviceRoleKey, ANON_KEY, SUPABASE_URL };
 
@@ -263,8 +263,14 @@ export function serviceClient() {
   return createClient(SUPABASE_URL, serviceRoleKey(), {
     auth: { autoRefreshToken: false, persistSession: false },
     global: {
-      fetch: (url, init) =>
-        undiciFetch(url as string, { ...init, dispatcher: proxyDispatcher }),
+      // supabase-js 声明的是 DOM 版 fetch/Response，而我们要塞 undici 的
+      // dispatcher 才能走代理，两者类型不兼容（undici 的 Headers 迭代器少了
+      // Symbol.dispose）。运行时完全没问题，纯粹是声明冲突，故在边界处强转。
+      fetch: ((url: string | URL | Request, init?: RequestInit) =>
+        undiciFetch(url as string, {
+          ...init,
+          dispatcher: proxyDispatcher,
+        } as UndiciRequestInit)) as unknown as typeof fetch,
     },
   });
 }
@@ -352,7 +358,11 @@ export async function cleanupBrowserTestData() {
  */
 export async function purgeMemberAppointments() {
   const admin = serviceClient();
-  const testMember = await retry(() => resolveTestMember(admin, "purgeMemberAppointments"));
+  // 把 supabase 客户端强转成 resolveTestMember 声明的最小结构：
+  // 完整客户端类型带着深层泛型，做结构匹配会让 TS 递归到爆（TS2589）。
+  const testMember = await retry<TestMember>(() =>
+    resolveTestMember(admin as unknown as Parameters<typeof resolveTestMember>[0], "purgeMemberAppointments")
+  );
 
   await retry(async () => {
     const { error } = await admin

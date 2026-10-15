@@ -30,17 +30,19 @@ export function MemberPassportCard({
               {name} 的养身护照
             </p>
           </div>
-          <BrandMark className="size-11 shrink-0 text-bronze-300/90" />
+          {/* 去掉 /90：半透明会把金色印章压到 3.12:1 */}
+          <BrandMark className="size-11 shrink-0 text-bronze-300" />
         </div>
 
         <div className="mt-9 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs text-bark-300">会员余额 · 到店消费自动核销</p>
+            {/* 深底上要用 bark-200：bark-300 在 bark-800 上只有 3.44:1 */}
+            <p className="text-xs text-bark-200">会员余额 · 到店消费自动核销</p>
             <p className="mt-1.5 font-serif text-4xl text-bronze-200">
               {formatCNY(balance)}
             </p>
           </div>
-          <p className="font-mono text-[11px] tracking-wider text-bark-300">
+          <p className="font-mono text-[11px] tracking-wider text-bark-200">
             NO.{memberId.slice(0, 8).toUpperCase()}
           </p>
         </div>

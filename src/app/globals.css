@@ -57,7 +57,15 @@
   --color-bark-50: #f7f3ee;
   --color-bark-100: #e7dcd2;
   --color-bark-200: #cbb9a8;
-  --color-bark-300: #a98f7b;
+  /*
+   * bark-300 同时承担两种角色：卡片上「无图占位」的大字（大字只需 3:1），
+   * 以及若干 10–12px 的弱化小字（需 4.5:1）。按后者取齐：
+   * 原值 #a98f7b 在卡片底上仅 2.68:1，改到 #7e6350 后浅底最差 4.89:1。
+   *
+   * 注意它无法同时满足深色底 —— 浅底要够暗、深底要够亮，两者区间不重叠。
+   * 因此深色底（页脚、侧栏、会员卡）上的弱化文字一律用 bark-200，不要用这个。
+   */
+  --color-bark-300: #7e6350;
   --color-bark-400: #7e6350;
   --color-bark-500: #5c4636;
   --color-bark-600: #4a382b;
@@ -71,11 +79,21 @@
   --color-bronze-200: #ead5a1;
   --color-bronze-300: #ddbe72;
   --color-bronze-400: #c99a2e;
-  --color-bronze-500: #b8860b;
-  --color-bronze-600: #9c7209;
-  --color-bronze-700: #7d5b0c;
-  --color-bronze-800: #63490f;
-  --color-bronze-900: #4a370e;
+  /*
+   * bronze-500 主要作为**按钮底色**（bg-bronze-500 + text-white）。
+   * 原值 #b8860b 上的白字只有 3.25:1，正文尺寸下不达标（需 4.5:1）。
+   * 压到 #8a6408 后白字 5.37:1 —— 这是全站主按钮，值得把对比度一次做足。
+   * 视觉上仍是同一支金铜色，只是深了一档，反而更衬米白宣纸底。
+   */
+  --color-bronze-500: #8a6408;
+  /*
+   * bronze-600 用于小字号强调文字（11–12px 的英文小标、金额等）。
+   * 原值 #9c7209 在页面底上只有 3.84:1；#7d5b0c 后有 5.49:1。
+   */
+  --color-bronze-600: #7d5b0c;
+  --color-bronze-700: #63490f;
+  --color-bronze-800: #4a370e;
+  --color-bronze-900: #38290a;
 
   --color-ivory: #f5f0e8;
   --color-paper: #faf7f1;
@@ -93,13 +111,16 @@
   --secondary: #ede4d6;
   --secondary-foreground: #4a382b;
   --muted: #f0e9dc;
-  --muted-foreground: #8a7767;
+  /* 次要文字。原值 #8a7767 在页面底 #f5f0e8 上只有 3.77:1，达不到正文 4.5:1 */
+  --muted-foreground: #75604f;
   --accent: #f0e9dc;
   --accent-foreground: #3d2b1f;
   --destructive: #a63d2f;
   --border: #e4d9c6;
   --input: #e4d9c6;
-  --ring: #b8860b;
+  /* 焦点环。原值 #b8860b 在页面底上 3.25:1，低于非文字 UI 所需的 3:1 下限，
+     键盘用户看焦点位置会偏吃力；加深一档后 5.37:1。 */
+  --ring: #8a6408;
   --chart-1: #b8860b;
   --chart-2: #7e6350;
   --chart-3: #cbb9a8;
@@ -113,7 +134,7 @@
   --sidebar-accent: #3d2b1f;
   --sidebar-accent-foreground: #f5ead0;
   --sidebar-border: #4a382b;
-  --sidebar-ring: #b8860b;
+  --sidebar-ring: #8a6408;
 }
 
 .dark {
@@ -147,7 +168,7 @@
   --sidebar-accent: #2e2016;
   --sidebar-accent-foreground: #f5ead0;
   --sidebar-border: #4a382b;
-  --sidebar-ring: #b8860b;
+  --sidebar-ring: #8a6408;
 }
 
 @layer base {
@@ -233,7 +254,8 @@
 
 /* Schedule-X 新中式轻奢主题定制：全面融入宣纸暖米白与宋代深木棕色调 */
 .schedule-x-theme-linzi {
-  --sx-color-primary: #b8860b;
+  /* 与设计中台保持一致：primary 与 on-primary 的组合需达 4.5:1 */
+  --sx-color-primary: #8a6408;
   --sx-color-on-primary: #ffffff;
   --sx-color-surface: #faf7f1;
   --sx-color-surface-dim: #f5f0e8;
@@ -330,7 +352,8 @@
 }
 .schedule-x-theme-linzi .sx__view-selection-item.is-selected {
   background-color: #fbf6e9 !important;
-  color: #b8860b !important;
+  /* 选中态文字压在 #fbf6e9 上，需 4.5:1 */
+  color: #7d5b0c !important;
   font-weight: 600 !important;
 }
 
@@ -341,9 +364,18 @@
   font-family: var(--font-serif);
 }
 .schedule-x-theme-linzi .sx__week-grid__date--is-today {
-  background-color: #b8860b !important;
+  background-color: #8a6408 !important;
   color: #ffffff !important;
   border-radius: 6px !important;
+}
+/* 「今日」格里的星期名/日期各有自己的颜色规则，优先级高于上面的 color，
+   不显式覆盖就会出现深棕字压在金铜底上（对比度 1.03:1，基本看不清）。 */
+.schedule-x-theme-linzi .sx__week-grid__date--is-today *,
+.schedule-x-theme-linzi .sx__week-grid__date--is-today
+  .sx__week-grid__day-name,
+.schedule-x-theme-linzi .sx__week-grid__date--is-today
+  .sx__week-grid__date-number {
+  color: #ffffff !important;
 }
 
 /* 时间轴与刻度线：温润细线，去除生硬冷灰 */
@@ -351,7 +383,8 @@
   border-color: #ede4d6 !important;
 }
 .schedule-x-theme-linzi .sx__week-grid__hour-text {
-  color: #a98f7b !important;
+  /* 时间刻度字号 11px，属正文级，需 4.5:1（原 #a98f7b 仅 2.85:1） */
+  color: #7e6350 !important;
   font-size: 11px !important;
   font-family: var(--font-mono);
 }

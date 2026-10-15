@@ -44,7 +44,7 @@ export function AccountActions({
   const [busy, setBusy] = useState(false);
 
   if (!userId) {
-    return <span className="text-xs text-bark-300">未关联登录账号</span>;
+    return <span className="text-xs text-bark-400">未关联登录账号</span>;
   }
 
   const resetPassword = async () => {

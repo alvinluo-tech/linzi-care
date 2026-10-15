@@ -205,7 +205,8 @@ export default function ServicesPage() {
                             <span className="font-serif text-2xl text-bronze-700">
                               {formatCNY(service.member_price)}
                             </span>
-                            <span className="text-[11px] font-serif text-bronze-600/80">
+                            {/* 11px 小字，去掉 /80 透明度才够 4.5:1 */}
+                            <span className="text-[11px] font-serif text-bronze-600">
                               会员价
                             </span>
                           </div>

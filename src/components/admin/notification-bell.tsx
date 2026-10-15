@@ -85,7 +85,7 @@ export function NotificationBell({ inbox }: { inbox: InboxState }) {
           variant="ghost"
           size="icon"
           aria-label={badge > 0 ? `通知中心，${badge} 条未读` : "通知中心"}
-          className="relative text-bark-300 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+          className="relative text-bark-200 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
         >
           <Bell className="size-4" />
           {badge > 0 && (

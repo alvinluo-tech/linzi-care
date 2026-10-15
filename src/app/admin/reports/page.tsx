@@ -119,7 +119,7 @@ export default function AdminReportsPage() {
               onChange={(e) => setFrom(e.target.value)}
               className="h-8 w-36 text-xs"
             />
-            <span className="text-bark-300">至</span>
+            <span className="text-bark-400">至</span>
             <Input
               type="date"
               value={to}

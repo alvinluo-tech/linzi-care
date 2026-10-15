@@ -102,7 +102,7 @@ export default function HomePage() {
                 <span className="text-vertical font-serif text-6xl tracking-[0.35em] text-bark-700 md:text-7xl">
                   静养
                 </span>
-                <BrandMark className="size-12 text-bronze-600/70" />
+                <BrandMark className="size-12 text-bronze-600" />
               </div>
               <MountainArt className="mt-10 w-full max-w-[220px] text-bronze-500/50" />
               <OrnamentDivider className="my-8" />
@@ -300,7 +300,7 @@ export default function HomePage() {
 
                   {/* 意境白描插图 */}
                   <div className="my-6 flex items-center justify-center rounded-lg bg-paper/60 py-4 transition-transform duration-500 group-hover:scale-[1.03]">
-                    <pillar.Art className="h-20 w-auto text-bronze-600/70 transition-colors duration-500 group-hover:text-bronze-700" />
+                    <pillar.Art className="h-20 w-auto text-bronze-600 transition-colors duration-500 group-hover:text-bronze-700" />
                   </div>
 
                   {/* 标题与副题 */}
@@ -518,7 +518,8 @@ function PricePair({
     <span className="flex items-baseline gap-2">
       <span className="font-serif text-lg text-bronze-700">
         {formatCNY(memberPrice)}
-        <span className="ml-1 text-xs font-normal text-bronze-600/70">
+        {/* rgba 半透明会把 12px 小字压到 3.14:1，跌破 4.5:1；改用实色 */}
+        <span className="ml-1 text-xs font-normal text-bronze-600">
           会员价
         </span>
       </span>

@@ -483,7 +483,7 @@ export function BookingWizard() {
                       "font-serif text-xs",
                       isCurrent && "font-semibold text-bronze-700",
                       isPassed && "text-bark-500",
-                      !isCurrent && !isPassed && "text-bark-300"
+                      !isCurrent && !isPassed && "text-bark-400"
                     )}
                   >
                     第{s.order}步
@@ -567,7 +567,8 @@ export function BookingWizard() {
                                 <span className="font-serif text-lg font-medium text-bronze-700">
                                   {formatCNY(s.member_price)}
                                 </span>
-                                <span className="ml-1 text-[10px] text-bronze-600/70">
+                                {/* 10px 小字，去掉 /70 透明度才够 4.5:1 */}
+                                <span className="ml-1 text-[10px] text-bronze-600">
                                   会员价
                                 </span>
                                 <span className="block text-[11px] text-bark-400">
@@ -847,7 +848,7 @@ export function BookingWizard() {
                 <ArrowLeft className="size-4" /> 上一步
               </Button>
             ) : (
-              <span className="text-[10px] tracking-widest text-bark-300">
+              <span className="text-[10px] tracking-widest text-bark-400">
                 壹 / 肆
               </span>
             )}

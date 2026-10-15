@@ -262,7 +262,7 @@ export default function AdminSchedulePage() {
                       </div>
                     ))}
                     {daySchedules.length === 0 && (
-                      <p className="py-4 text-center text-xs text-bark-300">休</p>
+                      <p className="py-4 text-center text-xs text-bark-400">休</p>
                     )}
                   </div>
                 </div>
